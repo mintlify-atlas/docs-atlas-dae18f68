@@ -78,7 +78,7 @@ internal/services/resources/
 │   │   ├── service_principal/
 │   │   └── ...
 │   └── graph_v1.0/          # v1.0 endpoint resources
-│       └── (coming soon)
+│       └── (Limited coverage)
 ├── device_and_app_management/
 │   ├── graph_beta/          # Most Intune resources use beta
 │   │   ├── win32_app/
@@ -616,7 +616,7 @@ resource "microsoft365_graph_beta_groups_group" "group" {
   # ... configuration ...
   
   # Document planned migration
-  # TODO: Migrate to graph_v1 when available
+  # Migrate to graph_v1 when stable resources are needed
 }
 ```
 
