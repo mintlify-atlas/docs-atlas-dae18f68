@@ -1,0 +1,360 @@
+---
+title: Data Sources Overview
+description: Comprehensive guide to querying Microsoft 365 resources with Terraform data sources
+icon: database
+---
+
+# Data Sources Overview
+
+Data sources in the Microsoft 365 Terraform Provider allow you to query and reference existing Microsoft 365 resources without managing them. This enables you to build configurations that reference organizational data, validate existing resources, and create dependencies between managed and unmanaged resources.
+
+## Available Data Source Categories
+
+The provider offers data sources across several key areas:
+
+<CardGroup cols={2}>
+  <Card title="Device Management" icon="laptop" href="/data-sources/device-management">
+    Query devices, policies, scripts, updates, and device configurations
+  </Card>
+  <Card title="Identity & Access" icon="id-card" href="/data-sources/identity-access">
+    Access tenant info, licenses, roles, and conditional access templates
+  </Card>
+  <Card title="Applications" icon="grid" href="/data-sources/applications">
+    Retrieve application registrations, service principals, and app metadata
+  </Card>
+  <Card title="Groups" icon="users">
+    Query security groups, Microsoft 365 groups, and membership information
+  </Card>
+</CardGroup>
+
+## Core Querying Capabilities
+
+### Multiple Query Methods
+
+Most data sources support flexible querying options:
+
+```hcl
+# Query by ID (most efficient)
+data "microsoft365_graph_beta_device_management_managed_device" "by_id" {
+  filter_type  = "id"
+  filter_value = "00000000-0000-0000-0000-000000000000"
+}
+
+# Query by name
+data "microsoft365_graph_beta_device_management_managed_device" "by_name" {
+  filter_type  = "device_name"
+  filter_value = "LAPTOP-ABC123"
+}
+
+# Query all resources
+data "microsoft365_graph_beta_device_management_managed_device" "all" {
+  filter_type = "all"
+}
+
+# Advanced OData queries
+data "microsoft365_graph_beta_device_management_managed_device" "odata" {
+  filter_type  = "odata"
+  odata_filter = "operatingSystem eq 'Windows'"
+  odata_top    = 50
+  odata_orderby = "lastSyncDateTime desc"
+}
+```
+
+### OData Query Support
+
+Many data sources support advanced OData query parameters:
+
+| Parameter | Description | Example |
+|-----------|-------------|----------|
+| `odata_filter` | Filter results by field values | `"status eq 'compliant'"` |
+| `odata_select` | Choose specific fields to return | `"id,displayName,status"` |
+| `odata_top` | Limit number of results | `10` |
+| `odata_orderby` | Sort results | `"displayName asc"` |
+| `odata_count` | Include count in response | `true` |
+| `odata_expand` | Include related entities | `"deviceCategory"` |
+| `odata_search` | Full-text search | `"\"displayName:LAPTOP\""` |
+
+<Note>
+OData queries provide powerful filtering but may have longer execution times. Use specific IDs when possible for best performance.
+</Note>
+
+## Common Patterns
+
+### Reference Existing Resources
+
+Use data sources to reference existing resources in your configurations:
+
+```hcl
+# Look up an existing group
+data "microsoft365_graph_beta_groups_group" "it_admins" {
+  display_name = "IT Administrators"
+}
+
+# Use in policy assignment
+resource "microsoft365_graph_beta_device_management_configuration_policy" "security" {
+  name = "Security Baseline"
+  
+  assignments = [
+    {
+      target = {
+        group_id = data.microsoft365_graph_beta_groups_group.it_admins.id
+      }
+    }
+  ]
+}
+```
+
+### Validate Resource Existence
+
+Check if resources exist before creating dependencies:
+
+```hcl
+data "microsoft365_graph_beta_applications_application" "existing" {
+  display_name = "My Application"
+}
+
+output "app_exists" {
+  value = length(data.microsoft365_graph_beta_applications_application.existing.id) > 0
+}
+```
+
+### Filter and Transform Data
+
+Query resources and transform the results:
+
+```hcl
+data "microsoft365_graph_beta_device_management_managed_device" "all_devices" {
+  filter_type = "all"
+}
+
+# Get only Windows devices
+locals {
+  windows_devices = [
+    for device in data.microsoft365_graph_beta_device_management_managed_device.all_devices.items :
+    device if device.operating_system == "Windows"
+  ]
+}
+
+output "windows_count" {
+  value = length(local.windows_devices)
+}
+```
+
+### Retrieve Lists for Iteration
+
+Use data sources to drive resource creation:
+
+```hcl
+data "microsoft365_graph_beta_identity_and_access_subscribed_skus" "all" {
+}
+
+output "license_summary" {
+  value = {
+    for sku in data.microsoft365_graph_beta_identity_and_access_subscribed_skus.all.subscribed_skus :
+    sku.sku_part_number => {
+      total     = sku.prepaid_units.enabled
+      consumed  = sku.consumed_units
+      available = sku.prepaid_units.enabled - sku.consumed_units
+    }
+  }
+}
+```
+
+## Performance Considerations
+
+### Query Optimization
+
+<AccordionGroup>
+  <Accordion title="Use Specific Filters">
+    Querying by ID or specific attributes is faster than retrieving all resources:
+    
+    ```hcl
+    # Faster - specific ID
+    data "microsoft365_graph_beta_groups_group" "specific" {
+      object_id = "12345678-1234-1234-1234-123456789012"
+    }
+    
+    # Slower - retrieve all then filter
+    data "microsoft365_graph_beta_groups_group" "all" {
+      filter_type = "all"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Limit Returned Fields">
+    Use `odata_select` to return only needed fields:
+    
+    ```hcl
+    data "microsoft365_graph_beta_device_management_managed_device" "summary" {
+      filter_type  = "odata"
+      odata_select = "id,deviceName,operatingSystem,complianceState"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Implement Pagination">
+    Use `odata_top` to limit large result sets:
+    
+    ```hcl
+    data "microsoft365_graph_beta_device_management_managed_device" "limited" {
+      filter_type = "odata"
+      odata_top   = 100
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Configure Timeouts">
+    Adjust timeouts for large queries:
+    
+    ```hcl
+    data "microsoft365_graph_beta_device_management_managed_device" "all" {
+      filter_type = "all"
+      
+      timeouts {
+        read = "5m"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Utility Data Sources
+
+The provider includes utility data sources for common operations:
+
+| Data Source | Purpose |
+|-------------|----------|
+| `microsoft365_utility_licensing_service_plan_reference` | Look up license SKUs and service plans |
+| `microsoft365_utility_deployment_scheduler` | Schedule phased deployments with time-based gates |
+| `microsoft365_utility_guid_list_sharder` | Split large GUID lists for batch operations |
+| `microsoft365_utility_entra_id_sid_converter` | Convert between Entra ID and SIDs |
+| `microsoft365_utility_itunes_app_metadata` | Retrieve iTunes app information |
+| `microsoft365_utility_microsoft_store_package_manifest_metadata` | Get Microsoft Store app metadata |
+| `microsoft365_utility_windows_msi_app_metadata` | Extract MSI file metadata |
+| `microsoft365_utility_macos_pkg_app_metadata` | Extract macOS PKG metadata |
+| `microsoft365_utility_microsoft_365_endpoint_reference` | Get Microsoft 365 service endpoints |
+| `microsoft365_utility_windows_remediation_script_registry_key_generator` | Generate registry key scripts |
+
+## Example: License Management
+
+```hcl
+# Get all subscribed licenses
+data "microsoft365_graph_beta_identity_and_access_subscribed_skus" "all" {
+}
+
+# Look up service plan details
+data "microsoft365_utility_licensing_service_plan_reference" "m365_e3" {
+  product_name = "Microsoft 365 E3"
+}
+
+# Output license availability
+output "license_report" {
+  value = {
+    for sku in data.microsoft365_graph_beta_identity_and_access_subscribed_skus.all.subscribed_skus :
+    sku.sku_part_number => {
+      name            = sku.sku_part_number
+      total_licenses  = sku.prepaid_units.enabled
+      used_licenses   = sku.consumed_units
+      available       = sku.prepaid_units.enabled - sku.consumed_units
+      utilization_pct = floor((sku.consumed_units / sku.prepaid_units.enabled) * 100)
+      status          = sku.capability_status
+    }
+  }
+}
+```
+
+## Example: Compliance Reporting
+
+```hcl
+# Get all managed devices
+data "microsoft365_graph_beta_device_management_managed_device" "all" {
+  filter_type = "all"
+}
+
+# Calculate compliance statistics
+locals {
+  compliant_devices = [
+    for device in data.microsoft365_graph_beta_device_management_managed_device.all.items :
+    device if device.compliance_state == "compliant"
+  ]
+  
+  non_compliant_devices = [
+    for device in data.microsoft365_graph_beta_device_management_managed_device.all.items :
+    device if device.compliance_state == "noncompliant"
+  ]
+  
+  total_devices = length(data.microsoft365_graph_beta_device_management_managed_device.all.items)
+}
+
+output "compliance_summary" {
+  value = {
+    total_devices       = local.total_devices
+    compliant           = length(local.compliant_devices)
+    non_compliant       = length(local.non_compliant_devices)
+    compliance_rate_pct = floor((length(local.compliant_devices) / local.total_devices) * 100)
+  }
+}
+
+output "non_compliant_devices" {
+  value = [
+    for device in local.non_compliant_devices : {
+      name            = device.device_name
+      user            = device.user_principal_name
+      last_sync       = device.last_sync_date_time
+      os              = device.operating_system
+    }
+  ]
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Appropriate Query Methods">
+    Choose the most efficient query method for your use case:
+    - Use ID lookups for known resources
+    - Use display name for human-friendly references
+    - Use OData filters for complex queries
+  </Step>
+  
+  <Step title="Handle Empty Results">
+    Always check for empty results before accessing data:
+    
+    ```hcl
+    output "device_info" {
+      value = length(data.microsoft365_graph_beta_device_management_managed_device.by_id.items) > 0 ? 
+        data.microsoft365_graph_beta_device_management_managed_device.by_id.items[0] : 
+        null
+    }
+    ```
+  </Step>
+  
+  <Step title="Minimize State File Size">
+    Use `odata_select` to return only necessary fields when querying large datasets.
+  </Step>
+  
+  <Step title="Set Appropriate Timeouts">
+    Configure timeouts based on expected query complexity and tenant size.
+  </Step>
+  
+  <Step title="Document Data Dependencies">
+    Clearly document which data sources your configuration depends on.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Device Management Data Sources" icon="laptop" href="/data-sources/device-management">
+    Query managed devices, policies, and configurations
+  </Card>
+  <Card title="Identity & Access Data Sources" icon="id-card" href="/data-sources/identity-access">
+    Retrieve tenant, license, and role information
+  </Card>
+  <Card title="Application Data Sources" icon="grid" href="/data-sources/applications">
+    Query apps, service principals, and app metadata
+  </Card>
+  <Card title="Examples" icon="code" href="/examples">
+    Browse complete configuration examples
+  </Card>
+</CardGroup>

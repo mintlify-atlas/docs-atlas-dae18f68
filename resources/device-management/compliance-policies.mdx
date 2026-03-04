@@ -1,0 +1,396 @@
+---
+title: Compliance Policies
+description: Define and enforce device compliance requirements across all platforms
+---
+
+Compliance policies define the requirements that devices must meet to be considered compliant and access corporate resources.
+
+## Available Resources
+
+<CardGroup cols={2}>
+  <Card title="Windows Compliance" icon="windows">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_device_compliance_policy`
+    
+    Compliance requirements for Windows 10/11 devices.
+  </Card>
+  
+  <Card title="macOS Compliance" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_management_macos_device_compliance_policy`
+    
+    Compliance requirements for macOS devices.
+  </Card>
+  
+  <Card title="iOS Compliance" icon="mobile">
+    **Resource**: `microsoft365_graph_beta_device_management_ios_device_compliance_policy`
+    
+    Compliance requirements for iOS/iPadOS devices.
+  </Card>
+  
+  <Card title="Android Compliance" icon="android">
+    **Resource**: `microsoft365_graph_beta_device_management_android_device_owner_compliance_policy`
+    
+    Compliance requirements for Android Enterprise devices.
+  </Card>
+  
+  <Card title="Linux Compliance" icon="linux">
+    **Resource**: `microsoft365_graph_beta_device_management_linux_device_compliance_policy`
+    
+    Compliance requirements for Linux devices.
+  </Card>
+  
+  <Card title="AOSP Compliance" icon="android">
+    **Resource**: `microsoft365_graph_beta_device_management_aosp_device_owner_compliance_policy`
+    
+    Compliance for Android Open Source Project devices.
+  </Card>
+</CardGroup>
+
+## Windows Compliance Policy
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_device_compliance_policy" "baseline" {
+  display_name = "Windows 11 Baseline Compliance"
+  description  = "Minimum compliance requirements for Windows 11"
+  
+  # Operating System
+  os_minimum_version = "10.0.22000.0"  # Windows 11
+  os_maximum_version = "10.0.99999.0"
+  
+  # BitLocker
+  bit_locker_enabled = true
+  
+  # Secure Boot
+  secure_boot_enabled = true
+  
+  # Code Integrity
+  code_integrity_enabled = true
+  
+  # Firewall
+  firewall_enabled = true
+  
+  # Antivirus
+  antivirus_required = true
+  antispyware_required = true
+  
+  # Windows Defender
+  defender_enabled = true
+  real_time_protection_enabled = true
+  
+  # Password
+  password_required = true
+  password_required_type = "alphanumeric"
+  password_minimum_length = 8
+  password_minutes_of_inactivity_before_lock = 15
+  password_expiration_days = 90
+  password_previous_password_block_count = 5
+  
+  # Device Health
+  require_healthy_device_report = true
+  
+  # TPM
+  tpm_required = true
+}
+```
+
+## macOS Compliance Policy
+
+```hcl
+resource "microsoft365_graph_beta_device_management_macos_device_compliance_policy" "baseline" {
+  display_name = "macOS Baseline Compliance"
+  description  = "Minimum compliance requirements for macOS"
+  
+  # Operating System
+  os_minimum_version = "13.0"  # macOS Ventura
+  os_maximum_version = "99.0"
+  
+  # System Security
+  system_integrity_protection_enabled = true
+  firewall_enabled = true
+  
+  # FileVault
+  storage_require_encryption = true
+  
+  # Password
+  password_required = true
+  password_required_type = "alphanumeric"
+  password_minimum_length = 8
+  password_minutes_of_inactivity_before_lock = 15
+  password_expiration_days = 90
+  password_previous_password_block_count = 5
+}
+```
+
+## iOS/iPadOS Compliance Policy
+
+```hcl
+resource "microsoft365_graph_beta_device_management_ios_device_compliance_policy" "baseline" {
+  display_name = "iOS/iPadOS Baseline Compliance"
+  description  = "Minimum compliance requirements for iOS/iPadOS"
+  
+  # Operating System
+  os_minimum_version = "16.0"
+  os_maximum_version = "99.0"
+  
+  # Security
+  passcode_required = true
+  passcode_required_type = "alphanumeric"
+  passcode_minimum_length = 6
+  passcode_minutes_of_inactivity_before_lock = 15
+  passcode_expiration_days = 90
+  passcode_previous_passcode_block_count = 5
+  
+  # Device Security
+  security_block_jailbroken_devices = true
+  device_threat_protection_enabled = true
+  device_threat_protection_required_security_level = "secured"
+}
+```
+
+## Android Compliance Policy
+
+```hcl
+resource "microsoft365_graph_beta_device_management_android_device_owner_compliance_policy" "baseline" {
+  display_name = "Android Enterprise Baseline Compliance"
+  description  = "Minimum compliance requirements for Android Enterprise"
+  
+  # Operating System
+  os_minimum_version = "11.0"
+  os_maximum_version = "99.0"
+  
+  # Security
+  password_required = true
+  password_required_type = "numeric"
+  password_minimum_length = 6
+  password_minutes_of_inactivity_before_lock = 15
+  password_expiration_days = 90
+  password_previous_password_count = 5
+  
+  # Device Security
+  security_require_verify_apps = true
+  security_block_device_administrator_managed_devices = false
+  
+  # Encryption
+  storage_require_encryption = true
+}
+```
+
+## Linux Compliance Policy
+
+```hcl
+resource "microsoft365_graph_beta_device_management_linux_device_compliance_policy" "baseline" {
+  display_name = "Linux Baseline Compliance"
+  description  = "Minimum compliance requirements for Linux"
+  
+  # Operating System
+  os_minimum_version = "20.04"  # Ubuntu 20.04 LTS
+  
+  # Password
+  password_required = true
+  password_minimum_length = 8
+  
+  # Encryption
+  storage_require_encryption = true
+}
+```
+
+## Compliance Scripts
+
+### Windows Compliance Script
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_device_compliance_script" "custom_check" {
+  display_name = "Custom Compliance Check"
+  description  = "Custom compliance validation"
+  
+  detection_script_content = base64encode(<<-EOT
+    # Check for specific software
+    $software = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*Required Software*" }
+    
+    if ($software) {
+        Write-Output "Required software found"
+        exit 0  # Compliant
+    } else {
+        Write-Output "Required software not found"
+        exit 1  # Non-compliant
+    }
+  EOT
+  )
+  
+  run_as_account = "system"
+  enforce_signature_check = false
+}
+```
+
+### Linux Compliance Script
+
+```hcl
+resource "microsoft365_graph_beta_device_management_linux_device_compliance_script" "security_check" {
+  display_name = "Linux Security Compliance"
+  description  = "Validate Linux security configuration"
+  
+  script_content = base64encode(<<-EOT
+    #!/bin/bash
+    
+    # Check if firewall is enabled
+    if systemctl is-active --quiet ufw; then
+        echo "Firewall is active"
+        exit 0  # Compliant
+    else
+        echo "Firewall is not active"
+        exit 1  # Non-compliant
+    fi
+  EOT
+  )
+}
+```
+
+## Actions for Noncompliance
+
+Configure actions when devices become noncompliant:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_device_compliance_policy" "with_actions" {
+  display_name = "Windows Compliance with Actions"
+  
+  # ... compliance settings
+  
+  scheduled_actions_for_rule = [
+    {
+      rule_name = "PasswordRequired"
+      scheduled_action_configurations = [
+        {
+          action_type = "block"
+          grace_period_hours = 72
+          notification_template_id = microsoft365_graph_beta_device_management_device_compliance_notification_template.warning.id
+        },
+        {
+          action_type = "retire"
+          grace_period_hours = 168  # 7 days
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Notification Templates
+
+Create custom notification templates:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_device_compliance_notification_template" "warning" {
+  display_name = "Compliance Warning"
+  brand_name   = "Contoso IT"
+  
+  default_locale = "en-US"
+  
+  localized_notification_messages = [
+    {
+      locale  = "en-US"
+      subject = "Your device is not compliant"
+      message_template = <<-EOT
+        Your device does not meet our security requirements.
+        
+        Please ensure:
+        - Your OS is up to date
+        - BitLocker is enabled
+        - Antivirus is running
+        
+        You have 72 hours to become compliant before access is blocked.
+      EOT
+      is_default = true
+    }
+  ]
+}
+```
+
+## Policy Assignment
+
+```hcl
+# Assign compliance policy to all Windows devices
+resource "microsoft365_graph_beta_device_management_device_compliance_policy_assignment" "windows_all" {
+  policy_id = microsoft365_graph_beta_device_management_windows_device_compliance_policy.baseline.id
+  
+  target = {
+    assignment_target_type = "allDevicesAssignmentTarget"
+  }
+}
+
+# Assign to specific group
+resource "microsoft365_graph_beta_device_management_device_compliance_policy_assignment" "windows_group" {
+  policy_id = microsoft365_graph_beta_device_management_windows_device_compliance_policy.baseline.id
+  
+  target = {
+    assignment_target_type = "groupAssignmentTarget"
+    group_id              = microsoft365_graph_beta_groups_group.windows_devices.id
+  }
+}
+```
+
+## Integration with Conditional Access
+
+Use compliance as a conditional access requirement:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "require_compliance" {
+  display_name = "Require Compliant Device"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+    }
+    applications = {
+      include_applications = ["All"]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["compliantDevice"]
+  }
+}
+```
+
+## Import Syntax
+
+```bash
+# Windows compliance
+terraform import microsoft365_graph_beta_device_management_windows_device_compliance_policy.policy <policy-id>
+
+# macOS compliance
+terraform import microsoft365_graph_beta_device_management_macos_device_compliance_policy.policy <policy-id>
+
+# iOS compliance
+terraform import microsoft365_graph_beta_device_management_ios_device_compliance_policy.policy <policy-id>
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Set realistic compliance requirements">
+    Balance security needs with user productivity. Overly strict policies may impact user experience.
+  </Accordion>
+
+  <Accordion title="Provide grace periods">
+    Give users time to remediate issues before blocking access. Use graduated actions (notify, then warn, then block).
+  </Accordion>
+
+  <Accordion title="Monitor compliance trends">
+    Regularly review compliance reports to identify common issues and adjust policies accordingly.
+  </Accordion>
+
+  <Accordion title="Test with pilot groups">
+    Deploy new compliance policies to pilot groups first to identify potential issues.
+  </Accordion>
+
+  <Accordion title="Document requirements">
+    Clearly communicate compliance requirements to end users and IT support staff.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Conditional Access](/resources/identity-access/conditional-access)
+- [Configuration Policies](/resources/device-management/configuration-policies)
+- [Device Enrollment](/resources/device-management/enrollment)

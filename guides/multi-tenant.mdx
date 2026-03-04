@@ -1,0 +1,600 @@
+---
+title: Multi-tenant management
+description: Multi-tenant management patterns for Microsoft 365 using Terraform across multiple tenants and organizations
+---
+
+This guide covers strategies and best practices for managing Microsoft 365 resources across multiple tenants using Terraform. Whether you're managing environments for multiple customers, business units, or subsidiaries, these patterns will help you maintain consistency while respecting tenant boundaries.
+
+## Overview
+
+Multi-tenant management introduces unique challenges:
+
+- Each tenant requires separate authentication credentials
+- Resources cannot be shared across tenant boundaries
+- Configuration drift across tenants is common
+- Compliance requirements may vary by tenant
+- Deployment schedules differ across organizations
+
+<Note>
+This guide focuses on managing **multiple Microsoft 365 tenants**, not to be confused with multi-environment management within a single tenant (dev/staging/prod).
+</Note>
+
+## Common multi-tenant scenarios
+
+<CardGroup cols={2}>
+  <Card title="Managed Service Provider (MSP)" icon="briefcase">
+    Managing Microsoft 365 for multiple customer organizations with varying requirements
+  </Card>
+  
+  <Card title="Enterprise with Subsidiaries" icon="building">
+    Corporate parent managing separate tenants for acquired companies or business units
+  </Card>
+  
+  <Card title="Global Organizations" icon="globe">
+    Multi-national companies with regional tenants for compliance or performance
+  </Card>
+  
+  <Card title="Merger & Acquisition" icon="handshake">
+    Temporary or permanent management of multiple tenants during organizational transitions
+  </Card>
+</CardGroup>
+
+## Pattern 1: Workspace-per-tenant
+
+Create a dedicated Terraform workspace for each tenant, each with its own state and credentials.
+
+### Structure
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Shared Terraform Modules                   │
+│  (Reusable policy definitions, compliance baselines, etc.)  │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+         ┌─────────────┼─────────────┬─────────────┐
+         │             │             │             │
+         ▼             ▼             ▼             ▼
+  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
+  │ Workspace: │ │ Workspace: │ │ Workspace: │ │ Workspace: │
+  │ tenant-a   │ │ tenant-b   │ │ tenant-c   │ │ tenant-d   │
+  ├────────────┤ ├────────────┤ ├────────────┤ ├────────────┤
+  │ Tenant ID: │ │ Tenant ID: │ │ Tenant ID: │ │ Tenant ID: │
+  │ aaaa-1111  │ │ bbbb-2222  │ │ cccc-3333  │ │ dddd-4444  │
+  │            │ │            │ │            │ │            │
+  │ Client ID: │ │ Client ID: │ │ Client ID: │ │ Client ID: │
+  │ app-a      │ │ app-b      │ │ app-c      │ │ app-d      │
+  └──────┬─────┘ └──────┬─────┘ └──────┬─────┘ └──────┬─────┘
+         │              │              │              │
+         ▼              ▼              ▼              ▼
+    tenant-a.tfstate tenant-b.tfstate tenant-c.tfstate tenant-d.tfstate
+```
+
+### Implementation
+
+<Steps>
+  <Step title="Create workspace-specific variable files">
+    ```hcl tenant-a.tfvars
+    tenant_id     = "aaaaaaaa-1111-1111-1111-111111111111"
+    client_id     = "11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    client_secret = "<tenant-a-secret>"  # From secure vault
+    
+    # Tenant-specific configuration
+    org_name            = "Contoso Corp"
+    compliance_baseline = "iso27001"
+    enabled_features    = ["mfa", "conditional_access", "intune"]
+    ```
+  </Step>
+  
+  <Step title="Configure provider with workspace variables">
+    ```hcl main.tf
+    terraform {
+      required_providers {
+        microsoft365 = {
+          source  = "deploymenttheory/microsoft365"
+          version = "~> 0.40.0"
+        }
+      }
+      
+      cloud {
+        organization = "my-msp"
+        workspaces {
+          tags = ["m365", "production"]
+        }
+      }
+    }
+    
+    provider "microsoft365" {
+      cloud       = "public"
+      tenant_id   = var.tenant_id
+      auth_method = "client_secret"
+      
+      entra_id_options = {
+        client_id     = var.client_id
+        client_secret = var.client_secret
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Use shared modules for consistency">
+    ```hcl main.tf
+    module "security_baseline" {
+      source = "git::https://github.com/org/m365-modules//security-baseline?ref=v2.1.0"
+      
+      tenant_name         = var.org_name
+      compliance_standard = var.compliance_baseline
+      break_glass_group   = var.break_glass_group_id
+    }
+    
+    module "intune_policies" {
+      source = "git::https://github.com/org/m365-modules//intune-policies?ref=v2.1.0"
+      
+      enabled_platforms = ["windows", "ios", "android"]
+      security_level    = "high"
+    }
+    ```
+  </Step>
+</Steps>
+
+**Advantages:**
+- Complete tenant isolation
+- Independent deployment cycles
+- Clear credential separation
+- Easy to add/remove tenants
+
+**Disadvantages:**
+- Repetitive workspace configuration
+- Manual coordination for cross-tenant updates
+- More workspaces to manage
+
+**Best For:**
+- MSPs managing customer tenants
+- Tenants with significantly different configurations
+- When tenant independence is critical
+
+## Pattern 2: Provider aliasing for multi-tenant deployment
+
+Use Terraform provider aliases to manage multiple tenants from a single workspace.
+
+```hcl
+provider "microsoft365" {
+  alias       = "tenant_a"
+  cloud       = "public"
+  tenant_id   = var.tenant_a_id
+  auth_method = "client_secret"
+  
+  entra_id_options = {
+    client_id     = var.tenant_a_client_id
+    client_secret = var.tenant_a_client_secret
+  }
+}
+
+provider "microsoft365" {
+  alias       = "tenant_b"
+  cloud       = "public"
+  tenant_id   = var.tenant_b_id
+  auth_method = "client_secret"
+  
+  entra_id_options = {
+    client_id     = var.tenant_b_client_id
+    client_secret = var.tenant_b_client_secret
+  }
+}
+
+# Deploy to tenant A
+resource "microsoft365_graph_beta_conditional_access_policy" "mfa_tenant_a" {
+  provider     = microsoft365.tenant_a
+  display_name = "Require MFA for All Users"
+  state        = "enabled"
+  
+  # ... configuration
+}
+
+# Deploy identical policy to tenant B
+resource "microsoft365_graph_beta_conditional_access_policy" "mfa_tenant_b" {
+  provider     = microsoft365.tenant_b
+  display_name = "Require MFA for All Users"
+  state        = "enabled"
+  
+  # ... configuration
+}
+```
+
+**Advantages:**
+- Single workspace manages multiple tenants
+- Easy to deploy identical resources across tenants
+- Simplified CI/CD pipeline
+
+**Disadvantages:**
+- All credentials in one workspace (security concern)
+- State file contains all tenants (blast radius)
+- Difficult to provide tenant-specific access control
+
+**Best For:**
+- Small number of closely related tenants
+- Deploying identical configurations
+- Internal multi-tenant scenarios (not MSPs)
+
+<Warning>
+**Security consideration:** This pattern stores credentials for all tenants in a single workspace. Use only when all operators should have access to all tenants.
+</Warning>
+
+## Pattern 3: Module-based tenant standardization
+
+Create reusable Terraform modules that encode your organizational standards, consumed by tenant-specific workspaces.
+
+### Module Repository Structure
+
+```
+m365-terraform-modules/
+├── security-baseline/
+│   ├── conditional-access.tf
+│   ├── named-locations.tf
+│   ├── variables.tf
+│   └── outputs.tf
+├── intune-baseline/
+│   ├── compliance-policies.tf
+│   ├── device-configs.tf
+│   ├── variables.tf
+│   └── outputs.tf
+└── identity-baseline/
+    ├── groups.tf
+    ├── admin-units.tf
+    ├── variables.tf
+    └── outputs.tf
+```
+
+### Tenant Implementation
+
+```hcl tenant-contoso/main.tf
+module "security" {
+  source  = "git::https://github.com/org/m365-modules//security-baseline?ref=v2.1.0"
+  
+  tenant_name               = "Contoso Corp"
+  break_glass_upn_prefix    = "breakglass"
+  enable_mfa_for_all_users  = true
+  enable_device_compliance  = true
+  trusted_locations         = var.office_locations
+}
+
+module "intune" {
+  source  = "git::https://github.com/org/m365-modules//intune-baseline?ref=v2.1.0"
+  
+  windows_compliance_level = "high"
+  ios_compliance_level     = "medium"
+  android_work_profile     = true
+  
+  # Reference security module outputs
+  device_compliance_group_id = module.security.device_compliance_group_id
+}
+```
+
+**Advantages:**
+- Consistent standards across tenants
+- Centralized updates via module versioning
+- Tenant-specific customization via variables
+- DRY principle (Don't Repeat Yourself)
+
+**Disadvantages:**
+- Requires module development investment
+- Version management across tenants
+- Testing module changes across tenant variations
+
+**Best For:**
+- Organizations with strong standardization requirements
+- MSPs delivering consistent security baselines
+- Enterprises with compliance mandates
+
+## Pattern 4: Tenant-specific customization layers
+
+Combine shared baseline modules with tenant-specific override layers.
+
+```hcl
+# Base module - standard security policies
+module "base_security" {
+  source = "git::https://github.com/org/m365-modules//security-baseline?ref=v2.1.0"
+  
+  # Standard configuration
+  enable_mfa                = true
+  block_legacy_auth         = true
+  require_compliant_devices = false  # Tenant will override
+}
+
+# Tenant-specific overrides
+resource "microsoft365_graph_beta_conditional_access_policy" "tenant_custom_device_compliance" {
+  display_name = "${var.tenant_name} - Device Compliance Required"
+  state        = "enabled"
+  
+  conditions {
+    users {
+      include_users = ["All"]
+      exclude_groups = [
+        module.base_security.break_glass_group_id,
+        var.tenant_specific_exclusion_group_id  # Tenant-specific
+      ]
+    }
+    
+    applications {
+      include_applications = ["All"]
+    }
+    
+    # Tenant-specific requirement
+    platforms {
+      include_platforms = var.required_compliance_platforms  # Windows, iOS only for this tenant
+    }
+  }
+  
+  grant_controls {
+    operator          = "AND"
+    built_in_controls = ["compliantDevice", "mfa"]
+  }
+}
+```
+
+**Use Cases:**
+- Customer-specific compliance requirements
+- Regional regulatory differences
+- Gradual rollout of new standards
+- Tenant-specific business needs
+
+## Managing credentials across tenants
+
+### Option 1: Terraform Cloud/Enterprise Variables
+
+<Steps>
+  <Step title="Create workspace variable sets">
+    Organize credentials into reusable variable sets:
+    - `tenant-a-credentials` (tenant_id, client_id, client_secret)
+    - `tenant-b-credentials`
+    - `tenant-c-credentials`
+  </Step>
+  
+  <Step title="Apply variable sets to workspaces">
+    Assign appropriate variable set to each tenant workspace, ensuring credentials are encrypted and access-controlled
+  </Step>
+  
+  <Step title="Use workspace-specific overrides">
+    Override specific variables per workspace as needed for tenant customization
+  </Step>
+</Steps>
+
+### Option 2: Azure Key Vault per tenant
+
+```hcl
+data "azurerm_key_vault" "tenant_vault" {
+  name                = "kv-${var.tenant_name}"
+  resource_group_name = var.key_vault_rg
+}
+
+data "azurerm_key_vault_secret" "client_secret" {
+  name         = "m365-client-secret"
+  key_vault_id = data.azurerm_key_vault.tenant_vault.id
+}
+
+provider "microsoft365" {
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+  
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = data.azurerm_key_vault_secret.client_secret.value
+  }
+}
+```
+
+### Option 3: Managed identities (Azure-hosted)
+
+```hcl
+provider "microsoft365" {
+  cloud       = "public"
+  tenant_id   = var.tenant_id
+  auth_method = "managed_identity"
+  
+  # Managed identity automatically used
+  # Grant MSI permissions in each target tenant
+}
+```
+
+## Deployment orchestration
+
+### Sequential tenant deployments
+
+```yaml .github/workflows/deploy-all-tenants.yml
+name: Deploy to All Tenants
+
+on:
+  workflow_dispatch:
+    inputs:
+      module_version:
+        description: 'Module version to deploy'
+        required: true
+
+jobs:
+  deploy-tenant-a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform Apply - Tenant A
+        run: terraform apply -auto-approve -parallelism=1
+        env:
+          TF_WORKSPACE: tenant-a-prod
+          TF_VAR_module_version: ${{ github.event.inputs.module_version }}
+  
+  deploy-tenant-b:
+    needs: deploy-tenant-a  # Wait for Tenant A
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform Apply - Tenant B
+        run: terraform apply -auto-approve -parallelism=1
+        env:
+          TF_WORKSPACE: tenant-b-prod
+          TF_VAR_module_version: ${{ github.event.inputs.module_version }}
+```
+
+### Parallel tenant deployments
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tenant: [tenant-a, tenant-b, tenant-c, tenant-d]
+      max-parallel: 4  # Deploy to 4 tenants simultaneously
+    
+    steps:
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform Apply - ${{ matrix.tenant }}
+        run: terraform apply -auto-approve -parallelism=1
+        env:
+          TF_WORKSPACE: ${{ matrix.tenant }}-prod
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use consistent naming conventions">
+    Establish naming standards across all tenants:
+    
+    ```hcl
+    locals {
+      resource_prefix = "${var.tenant_name}-${var.environment}"
+    }
+    
+    resource "microsoft365_graph_beta_groups_group" "security" {
+      display_name = "${local.resource_prefix}-Security-Team"
+      # Contoso-Prod-Security-Team
+      # Fabrikam-Prod-Security-Team
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Version your modules">
+    Pin module versions for stability:
+    
+    ```hcl
+    module "security" {
+      source = "git::https://github.com/org/modules//security?ref=v2.1.0"
+      # NOT: ?ref=main (unpredictable)
+    }
+    ```
+    
+    Use semantic versioning:
+    - `v1.0.0` → `v1.1.0` - Safe, backward-compatible features
+    - `v1.0.0` → `v2.0.0` - Breaking changes, test thoroughly
+  </Accordion>
+  
+  <Accordion title="Implement drift detection">
+    Schedule regular drift detection across all tenants:
+    
+    ```bash
+    # Run daily via cron/GitHub Actions
+    for tenant in tenant-a tenant-b tenant-c; do
+      terraform workspace select $tenant
+      terraform plan -detailed-exitcode -parallelism=1
+    done
+    ```
+  </Accordion>
+  
+  <Accordion title="Test changes in pilot tenant first">
+    Designate one tenant as your canary:
+    
+    ```yaml
+    # Deploy order: pilot → staging tenants → production tenants
+    1. tenant-pilot (your test tenant)
+    2. tenant-staging-a, tenant-staging-b (subset of prod)
+    3. tenant-prod-1, tenant-prod-2, ..., tenant-prod-n (all production)
+    ```
+  </Accordion>
+  
+  <Accordion title="Document tenant-specific deviations">
+    Track when and why tenants differ from baseline:
+    
+    ```hcl
+    # tenant-contoso/main.tf
+    
+    # DEVIATION: Contoso requires MFA exemption for kiosk devices
+    # Approved by: CISO John Smith
+    # Date: 2024-01-15
+    # Ticket: SEC-1234
+    resource "microsoft365_graph_beta_groups_group" "kiosk_mfa_exempt" {
+      display_name = "Contoso - Kiosk MFA Exemption"
+      # ...
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting multi-tenant deployments
+
+<AccordionGroup>
+  <Accordion title="Authentication failures across tenants">
+    **Symptom**: Deployment works for some tenants but not others
+    
+    **Common causes:**
+    - Service principal not created in target tenant
+    - Insufficient permissions granted in tenant
+    - Conditional access blocking service principal
+    
+    **Solution:**
+    ```bash
+    # Verify service principal exists in tenant
+    az ad sp list --filter "appId eq '<client-id>'" --query "[].{DisplayName:displayName, AppId:appId}" -o table
+    
+    # Check permissions granted
+    az ad sp show --id <client-id> --query "appRoles[].{Role:value, Granted:allowedMemberTypes}" -o table
+    ```
+  </Accordion>
+  
+  <Accordion title="Resource conflicts across tenants">
+    **Symptom**: Resource names/IDs conflicting across tenants in shared state
+    
+    **Solution**: Use tenant-specific resource naming:
+    ```hcl
+    resource "microsoft365_graph_beta_groups_group" "security" {
+      display_name = "${var.tenant_name}-Security-Team"  # Include tenant name
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Inconsistent module versions across tenants">
+    **Symptom**: Different behaviors across tenants, configuration drift
+    
+    **Solution**: Centralize module version management:
+    ```hcl
+    # versions.tf (shared across all tenant configs)
+    locals {
+      module_versions = {
+        security = "v2.1.0"
+        intune   = "v1.5.2"
+        identity = "v3.0.1"
+      }
+    }
+    
+    module "security" {
+      source = "git::https://github.com/org/modules//security?ref=${local.module_versions.security}"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Workspace design patterns" icon="diagram-project">
+    Learn about workspace architecture for large deployments
+  </Card>
+  
+  <Card title="Progressive rollout" icon="arrows-split-up-and-left">
+    Phased deployment strategies for safer rollouts
+  </Card>
+  
+  <Card title="Disaster recovery" icon="life-ring">
+    Backup and recovery strategies for M365
+  </Card>
+  
+  <Card title="Provider aliasing" icon="clone" href="https://developer.hashicorp.com/terraform/language/providers/configuration#alias-multiple-provider-configurations">
+    Official Terraform provider aliasing docs
+  </Card>
+</CardGroup>

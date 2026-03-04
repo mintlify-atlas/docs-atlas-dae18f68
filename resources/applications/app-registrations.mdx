@@ -1,0 +1,118 @@
+---
+title: App Registrations
+description: Register and configure applications in Azure AD
+---
+
+## Resources
+
+<Card title="Application" icon="file-signature">
+  **Resource**: `microsoft365_graph_beta_applications_application`
+  
+  Register applications in Azure AD for authentication and authorization.
+</Card>
+
+## Basic Application
+
+```hcl
+resource "microsoft365_graph_beta_applications_application" "minimal" {
+  display_name = "My Application"
+  description  = "Application description"
+}
+```
+
+## Web Application
+
+```hcl
+resource "microsoft365_graph_beta_applications_application" "web_app" {
+  display_name = "Corporate Web Application"
+  description  = "Main corporate web application"
+  
+  sign_in_audience = "AzureADMyOrg"
+  
+  web = {
+    redirect_uris = [
+      "https://app.contoso.com/auth/callback",
+      "https://app.contoso.com/auth/silent"
+    ]
+    
+    implicit_grant_settings = {
+      enable_id_token_issuance     = true
+      enable_access_token_issuance = false
+    }
+    
+    home_page_url = "https://app.contoso.com"
+    logout_url    = "https://app.contoso.com/logout"
+  }
+  
+  required_resource_access = [
+    {
+      resource_app_id = "00000003-0000-0000-c000-000000000000"  # Microsoft Graph
+      resource_access = [
+        {
+          id   = "e1fe6dd8-ba31-4d61-89e7-88639da4683d"  # User.Read
+          type = "Scope"
+        },
+        {
+          id   = "b4e74841-8e56-480b-be8b-910348b18b4c"  # User.ReadWrite
+          type = "Scope"
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Multi-Tenant Application
+
+```hcl
+resource "microsoft365_graph_beta_applications_application" "multitenant" {
+  display_name     = "Multi-Tenant SaaS App"
+  sign_in_audience = "AzureADMultipleOrgs"
+  
+  web = {
+    redirect_uris = [
+      "https://app.example.com/auth/callback"
+    ]
+  }
+}
+```
+
+## API Application
+
+```hcl
+resource "microsoft365_graph_beta_applications_application" "api" {
+  display_name = "Corporate API"
+  
+  identifier_uris = [
+    "api://contoso.com/corporate-api"
+  ]
+  
+  api = {
+    oauth2_permission_scopes = [
+      {
+        id                      = "00000000-0000-0000-0000-000000000001"
+        admin_consent_description = "Allow the application to access the API"
+        admin_consent_display_name = "Access API"
+        is_enabled              = true
+        type                    = "Admin"
+        user_consent_description = "Allow the application to access the API on your behalf"
+        user_consent_display_name = "Access API"
+        value                   = "API.Access"
+      }
+    ]
+    
+    requested_access_token_version = 2
+  }
+}
+```
+
+## Import Syntax
+
+```bash
+terraform import microsoft365_graph_beta_applications_application.app <application-object-id>
+```
+
+## Related Resources
+
+- [Service Principals](/resources/applications/service-principals)
+- [Credentials](/resources/applications/credentials)

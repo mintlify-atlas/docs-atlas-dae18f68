@@ -1,0 +1,369 @@
+---
+title: Mobile Apps
+description: Manage mobile applications across Windows, macOS, iOS, and Android platforms
+---
+
+Mobile app resources enable you to deploy and manage applications across all major platforms in Microsoft Intune.
+
+## Available Resources
+
+### Windows Applications
+
+<CardGroup cols={2}>
+  <Card title="Win32 App" icon="windows">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_win32_app`
+    
+    Deploy Win32 line-of-business apps with custom detection rules and requirements.
+  </Card>
+  
+  <Card title="WinGet App" icon="box">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_win_get_app`
+    
+    Deploy apps from the Windows Package Manager repository.
+  </Card>
+  
+  <Card title="Windows Web App" icon="globe">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_windows_web_app`
+    
+    Create web shortcuts for Windows devices.
+  </Card>
+  
+  <Card title="Office Suite App" icon="file-excel">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_office_suite_app`
+    
+    Deploy Microsoft 365 Apps (Office suite).
+  </Card>
+</CardGroup>
+
+### macOS Applications
+
+<CardGroup cols={2}>
+  <Card title="macOS PKG App" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_macos_pkg_app`
+    
+    Deploy macOS PKG installer packages.
+  </Card>
+  
+  <Card title="macOS DMG App" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_macos_dmg_app`
+    
+    Deploy macOS DMG applications.
+  </Card>
+  
+  <Card title="macOS LOB App" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_macos_lob_app`
+    
+    Deploy macOS line-of-business applications.
+  </Card>
+  
+  <Card title="macOS VPP App" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_macos_vpp_app`
+    
+    Deploy apps from Apple Business Manager (VPP).
+  </Card>
+</CardGroup>
+
+### iOS/iPadOS Applications
+
+<CardGroup cols={2}>
+  <Card title="iOS Store App" icon="app-store-ios">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_ios_store_app`
+    
+    Deploy apps from the Apple App Store.
+  </Card>
+  
+  <Card title="iOS/iPadOS Web Clip" icon="link">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_ios_ipados_web_clip`
+    
+    Create web shortcuts for iOS/iPadOS devices.
+  </Card>
+</CardGroup>
+
+### Android Applications
+
+<CardGroup cols={2}>
+  <Card title="Android Managed Mobile App" icon="android">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_android_managed_mobile_app`
+    
+    Deploy Android managed apps.
+  </Card>
+</CardGroup>
+
+### Cross-Platform Resources
+
+<CardGroup cols={2}>
+  <Card title="Application Category" icon="folder">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_application_category`
+    
+    Create custom app categories for organization.
+  </Card>
+  
+  <Card title="Managed Mobile App" icon="mobile">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_windows_managed_mobile_app`
+    
+    Manage Windows mobile apps with protection policies.
+  </Card>
+  
+  <Card title="App Supersedence" icon="arrows-rotate">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_mobile_app_supersedence`
+    
+    Define app replacement relationships.
+  </Card>
+</CardGroup>
+
+## Win32 App Example
+
+<CodeGroup>
+```hcl Basic Win32 App
+resource "microsoft365_graph_beta_device_and_app_management_win32_app" "firefox" {
+  display_name    = "Mozilla Firefox 140.0.4 x64"
+  description     = "Mozilla Firefox web browser"
+  publisher       = "Mozilla"
+  developer       = "Mozilla"
+  display_version = "140.0.4.0"
+  
+  app_installer = {
+    installer_file_path_source = "/path/to/Firefox_Setup.intunewin"
+  }
+  
+  allowed_architectures             = ["x64", "arm64"]
+  minimum_supported_windows_release = "Windows11_23H2"
+  
+  install_experience = {
+    device_restart_behavior = "allow"
+    max_run_time_in_minutes = 60
+    run_as_account          = "system"
+  }
+  
+  setup_file_path        = "Firefox Setup 140.0.4.msi"
+  install_command_line   = "msiexec /i \"Firefox Setup 140.0.4.msi\" /qn"
+  uninstall_command_line = "msiexec /x {1294A4C5-9977-480F-9497-C0EA1E630130} /qn"
+  
+  msi_information = {
+    package_type    = "perMachine"
+    product_code    = "{1294A4C5-9977-480F-9497-C0EA1E630130}"
+    product_name    = "Mozilla Firefox 140.0.4"
+    publisher       = "Mozilla"
+    product_version = "140.0.4.0"
+    requires_reboot = false
+  }
+  
+  # Detection rule
+  rules = [
+    {
+      rule_type                             = "detection"
+      rule_sub_type                         = "powershell_script"
+      enforce_signature_check               = true
+      run_as_32_bit                         = true
+      powershell_script_rule_operation_type = "notConfigured"
+      lob_app_rule_operator                 = "notConfigured"
+      script_content                        = <<EOT
+$path = "$${env:ProgramFiles}\\Mozilla Firefox\\firefox.exe"
+if (Test-Path $path) {
+    exit 0
+} else {
+    exit 1
+}
+EOT
+    }
+  ]
+  
+  return_codes = [
+    {
+      return_code = 0
+      type        = "success"
+    },
+    {
+      return_code = 3010
+      type        = "softReboot"
+    },
+    {
+      return_code = 1641
+      type        = "hardReboot"
+    }
+  ]
+}
+```
+
+```hcl With Categories
+resource "microsoft365_graph_beta_device_and_app_management_application_category" "web_browser" {
+  display_name = "Web Browsers"
+}
+
+resource "microsoft365_graph_beta_device_and_app_management_win32_app" "firefox" {
+  display_name = "Mozilla Firefox"
+  publisher    = "Mozilla"
+  
+  categories = [
+    microsoft365_graph_beta_device_and_app_management_application_category.web_browser.id,
+    "Productivity",
+    "Business"
+  ]
+  
+  app_installer = {
+    installer_file_path_source = "/path/to/Firefox.intunewin"
+  }
+  
+  # ... other configuration
+}
+```
+</CodeGroup>
+
+## WinGet App Example
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_win_get_app" "vscode" {
+  display_name = "Visual Studio Code"
+  description  = "Code editor"
+  publisher    = "Microsoft Corporation"
+  
+  package_identifier = "Microsoft.VisualStudioCode"
+  
+  install_experience = {
+    run_as_account = "user"
+  }
+}
+```
+
+## macOS PKG App Example
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_macos_pkg_app" "company_portal" {
+  display_name = "Company Portal"
+  description  = "Microsoft Intune Company Portal for macOS"
+  publisher    = "Microsoft Corporation"
+  
+  # Configuration details
+}
+```
+
+## iOS Store App Example
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_ios_store_app" "edge" {
+  display_name        = "Microsoft Edge"
+  description         = "Web browser for iOS"
+  publisher           = "Microsoft Corporation"
+  bundle_id           = "com.microsoft.msedge"
+  applicable_device_type = {
+    ipad  = true
+    iphone = true
+  }
+}
+```
+
+## iOS/iPadOS Web Clip Example
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_ios_ipados_web_clip" "company_portal" {
+  display_name = "Company Portal Web"
+  url          = "https://portal.manage.microsoft.com"
+  
+  app_icon = {
+    icon_url_source = "https://example.com/icon.png"
+  }
+}
+```
+
+## Detection Rules
+
+Win32 apps support multiple detection rule types:
+
+### PowerShell Script Detection
+
+```hcl
+rules = [
+  {
+    rule_type                             = "detection"
+    rule_sub_type                         = "powershell_script"
+    enforce_signature_check               = false
+    run_as_32_bit                         = false
+    powershell_script_rule_operation_type = "notConfigured"
+    lob_app_rule_operator                 = "notConfigured"
+    script_content                        = <<EOT
+# Check if app is installed
+$path = "C:\\Program Files\\MyApp\\app.exe"
+if (Test-Path $path) {
+    $version = (Get-Item $path).VersionInfo.FileVersion
+    if ($version -ge "1.0.0") {
+        exit 0  # App detected
+    }
+}
+exit 1  # App not detected
+EOT
+  }
+]
+```
+
+### File System Detection
+
+```hcl
+rules = [
+  {
+    rule_type                  = "detection"
+    rule_sub_type              = "file_system"
+    check_32_bit_on_64_system  = false
+    path                       = "C:\\Program Files\\MyApp"
+    file_or_folder_name        = "app.exe"
+    file_system_operation_type = "exists"
+    lob_app_rule_operator      = "notConfigured"
+  }
+]
+```
+
+### Registry Detection
+
+```hcl
+rules = [
+  {
+    rule_type                 = "detection"
+    rule_sub_type             = "registry"
+    check_32_bit_on_64_system = false
+    key_path                  = "HKLM\\SOFTWARE\\MyApp"
+    value_name                = "Version"
+    operation_type            = "exists"
+    lob_app_rule_operator     = "notConfigured"
+  }
+]
+```
+
+## App Supersedence
+
+Define app replacement relationships:
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_supersedence" "firefox_upgrade" {
+  superseding_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.firefox_new.id
+  superseded_app_id  = microsoft365_graph_beta_device_and_app_management_win32_app.firefox_old.id
+  
+  supersedence_type = "update"
+}
+```
+
+## Import Syntax
+
+```bash
+# Import Win32 app
+terraform import microsoft365_graph_beta_device_and_app_management_win32_app.firefox <app-id>
+
+# Import WinGet app
+terraform import microsoft365_graph_beta_device_and_app_management_win_get_app.vscode <app-id>
+
+# Import iOS Store app
+terraform import microsoft365_graph_beta_device_and_app_management_ios_store_app.edge <app-id>
+
+# Import macOS PKG app
+terraform import microsoft365_graph_beta_device_and_app_management_macos_pkg_app.portal <app-id>
+```
+
+## Related Resources
+
+- [App Configuration](/resources/device-app-management/app-configuration) - Configure app settings
+- [App Assignments](/resources/device-app-management/app-assignments) - Deploy apps to users and devices
+- [Device Management](/resources/device-management/overview) - Device policies and compliance
+
+## Schema Reference
+
+<Note>
+  For complete schema documentation including all attributes, refer to the [Terraform Registry documentation](https://registry.terraform.io/providers/deploymenttheory/microsoft365/latest/docs) for each resource.
+</Note>

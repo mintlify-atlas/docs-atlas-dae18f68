@@ -1,0 +1,378 @@
+---
+title: Windows Updates
+description: Manage Windows Update deployment with update rings and driver update profiles
+---
+
+Windows Update resources enable you to control when and how Windows updates are deployed to devices.
+
+## Available Resources
+
+<CardGroup cols={2}>
+  <Card title="Windows Update Ring" icon="arrows-rotate">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_update_ring`
+    
+    Control Windows Update deployment timing and behavior.
+  </Card>
+  
+  <Card title="Windows Update Ring Action" icon="play">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_update_ring_action`
+    
+    Trigger immediate update actions.
+  </Card>
+  
+  <Card title="Driver Update Profile" icon="microchip">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_driver_update_profile`
+    
+    Manage driver update deployment.
+  </Card>
+  
+  <Card title="Driver Update Inventory" icon="list">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_driver_update_inventory`
+    
+    Track available driver updates.
+  </Card>
+</CardGroup>
+
+## Windows Update Ring Example
+
+<CodeGroup>
+```hcl Production Ring
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "production" {
+  display_name = "Production Update Ring"
+  description  = "Standard update deployment for production devices"
+  
+  # Allow Windows 11 upgrade
+  allow_windows11_upgrade = true
+  
+  # Quality updates (security/bug fixes)
+  quality_updates_deferral_period_in_days = 7
+  quality_updates_paused = false
+  
+  # Feature updates (major version updates)
+  feature_updates_deferral_period_in_days = 30
+  feature_updates_paused = false
+  
+  # Update behavior
+  automatic_update_mode = "autoInstallAtMaintenanceTime"
+  business_ready_updates_only = "businessReadyOnly"
+  
+  # User controls
+  user_pause_access = "disabled"
+  user_windows_update_scan_access = "enabled"
+  
+  # Notifications
+  update_notification_level = "defaultNotifications"
+  
+  # Deadlines
+  deadline_settings = {
+    deadline_for_feature_updates_in_days = 7
+    deadline_for_quality_updates_in_days = 3
+    deadline_grace_period_in_days        = 2
+    postpone_reboot_until_after_deadline = false
+  }
+  
+  # Restart settings
+  installation_schedule = {
+    active_hours_start = 8
+    active_hours_end   = 18
+  }
+  
+  # Feature update rollback
+  feature_updates_rollback_window_in_days = 10
+  
+  # Assignment
+  assignments = [
+    {
+      type        = "allDevicesAssignmentTarget"
+      filter_type = "none"
+    }
+  ]
+}
+```
+
+```hcl Pilot Ring
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "pilot" {
+  display_name = "Pilot Update Ring"
+  description  = "Early update deployment for pilot users"
+  
+  # Get updates earlier
+  quality_updates_deferral_period_in_days = 0
+  feature_updates_deferral_period_in_days = 0
+  
+  # Windows Insider builds
+  business_ready_updates_only = "windowsInsiderBuildRelease"
+  
+  automatic_update_mode = "autoInstallAndRebootAtScheduledTime"
+  
+  installation_schedule = {
+    active_hours_start = 8
+    active_hours_end   = 18
+  }
+  
+  # Assign to pilot group
+  assignments = [
+    {
+      type        = "groupAssignmentTarget"
+      group_id    = microsoft365_graph_beta_groups_group.pilot_users.id
+      filter_type = "none"
+    }
+  ]
+}
+```
+
+```hcl IT Department Ring
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "it_department" {
+  display_name = "IT Department Update Ring"
+  description  = "Updates for IT staff devices"
+  
+  # Minimal deferral
+  quality_updates_deferral_period_in_days = 1
+  feature_updates_deferral_period_in_days = 7
+  
+  # More user control
+  user_pause_access = "enabled"
+  user_windows_update_scan_access = "enabled"
+  
+  automatic_update_mode = "notifyDownload"
+  update_notification_level = "restartWarningsOnly"
+  
+  assignments = [
+    {
+      type        = "groupAssignmentTarget"
+      group_id    = microsoft365_graph_beta_groups_group.it_staff.id
+      filter_type = "none"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+## Update Ring with Maximal Assignments
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "multi_assignment" {
+  display_name = "Multi-Assignment Update Ring"
+  
+  quality_updates_deferral_period_in_days = 7
+  feature_updates_deferral_period_in_days = 14
+  
+  automatic_update_mode = "autoInstallAtMaintenanceTime"
+  
+  assignments = [
+    # Assign to specific groups
+    {
+      type        = "groupAssignmentTarget"
+      group_id    = microsoft365_graph_beta_groups_group.group1.id
+      filter_type = "none"
+    },
+    {
+      type        = "groupAssignmentTarget"
+      group_id    = microsoft365_graph_beta_groups_group.group2.id
+      filter_type = "none"
+    },
+    # Assign to all licensed users
+    {
+      type        = "allLicensedUsersAssignmentTarget"
+      filter_type = "none"
+    },
+    # Assign to all devices
+    {
+      type        = "allDevicesAssignmentTarget"
+      filter_type = "none"
+    },
+    # Exclude specific group
+    {
+      type        = "exclusionGroupAssignmentTarget"
+      group_id    = microsoft365_graph_beta_groups_group.exclusion.id
+      filter_type = "none"
+    }
+  ]
+}
+```
+
+## Windows Update Ring Actions
+
+Trigger immediate update actions:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_update_ring_action" "scan_now" {
+  update_ring_id = microsoft365_graph_beta_device_management_windows_update_ring.production.id
+  action_type    = "scan"
+}
+
+resource "microsoft365_graph_beta_device_management_windows_update_ring_action" "install_now" {
+  update_ring_id = microsoft365_graph_beta_device_management_windows_update_ring.production.id
+  action_type    = "install"
+}
+```
+
+## Driver Update Profile
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_driver_update_profile" "approved_drivers" {
+  display_name = "Approved Driver Updates"
+  description  = "Automatically approved driver updates"
+  
+  approval_type = "automatic"
+  
+  # Deployment settings
+  deployment_deferral_in_days = 7
+  
+  # Assignment
+  assignments = [
+    {
+      target = {
+        device_and_app_management_assignment_target_type = "allDevicesAssignmentTarget"
+      }
+    }
+  ]
+}
+```
+
+## Automatic Update Modes
+
+| Mode | Description | User Interaction |
+|------|-------------|------------------|
+| `autoInstallAtMaintenanceTime` | Install during maintenance window | Minimal |
+| `autoInstallAndRebootAtMaintenanceTime` | Install and reboot during maintenance | Minimal |
+| `autoInstallAndRebootAtScheduledTime` | Install and reboot at scheduled time | None |
+| `notifyDownload` | Notify user before download | Required |
+| `windowsDefault` | Use Windows default behavior | Varies |
+
+## Business Ready Update Options
+
+| Option | Description |
+|--------|-------------|
+| `businessReadyOnly` | Deploy only business-ready updates |
+| `windowsInsiderBuildRelease` | Include Windows Insider builds |
+| `all` | Deploy all available updates |
+
+## Deadline Configuration
+
+```hcl
+deadline_settings = {
+  # Days after update available before required install
+  deadline_for_feature_updates_in_days = 7
+  deadline_for_quality_updates_in_days = 3
+  
+  # Grace period after deadline
+  deadline_grace_period_in_days = 2
+  
+  # Allow postponing reboot past deadline
+  postpone_reboot_until_after_deadline = false
+}
+```
+
+## Installation Schedule
+
+```hcl
+installation_schedule = {
+  # Active hours (no automatic restarts)
+  active_hours_start = 8   # 8 AM
+  active_hours_end   = 18  # 6 PM
+}
+```
+
+## Advanced Scenarios
+
+### Pause Updates Temporarily
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "paused" {
+  display_name = "Paused Update Ring"
+  
+  quality_updates_paused  = true
+  feature_updates_paused  = true
+  
+  # Automatically unpause after 35 days
+  quality_updates_pause_expiry_date_time = "2025-07-01T00:00:00Z"
+  feature_updates_pause_expiry_date_time = "2025-07-01T00:00:00Z"
+}
+```
+
+### Skip Pre-Restart Checks
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "skip_checks" {
+  display_name = "Skip Restart Checks"
+  
+  # Skip battery, active hours, and other checks before restart
+  skip_checks_before_restart = true
+  
+  automatic_update_mode = "autoInstallAndRebootAtScheduledTime"
+}
+```
+
+## Update Rings Strategy
+
+Implement a phased deployment approach:
+
+```hcl
+# Ring 1: IT/Pilot (0 day deferral)
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "ring1_pilot" {
+  display_name = "Ring 1 - Pilot"
+  quality_updates_deferral_period_in_days = 0
+  feature_updates_deferral_period_in_days = 0
+}
+
+# Ring 2: Early Adopters (7 day deferral)
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "ring2_early" {
+  display_name = "Ring 2 - Early Adopters"
+  quality_updates_deferral_period_in_days = 7
+  feature_updates_deferral_period_in_days = 14
+}
+
+# Ring 3: Production (14 day deferral)
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "ring3_production" {
+  display_name = "Ring 3 - Production"
+  quality_updates_deferral_period_in_days = 14
+  feature_updates_deferral_period_in_days = 30
+}
+
+# Ring 4: Critical Systems (30 day deferral)
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "ring4_critical" {
+  display_name = "Ring 4 - Critical Systems"
+  quality_updates_deferral_period_in_days = 30
+  feature_updates_deferral_period_in_days = 60
+}
+```
+
+## Import Syntax
+
+```bash
+# Import update ring
+terraform import microsoft365_graph_beta_device_management_windows_update_ring.production <policy-id>
+
+# Import driver update profile
+terraform import microsoft365_graph_beta_device_management_windows_driver_update_profile.drivers <profile-id>
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Implement phased deployment">
+    Use multiple update rings with increasing deferral periods to catch issues early before broad deployment.
+  </Accordion>
+
+  <Accordion title="Test with IT first">
+    Deploy updates to IT staff first so they can identify and resolve issues before affecting end users.
+  </Accordion>
+
+  <Accordion title="Set reasonable deadlines">
+    Balance security needs with user productivity. Give users adequate time to complete work before forced restarts.
+  </Accordion>
+
+  <Accordion title="Configure active hours appropriately">
+    Set active hours to match your organization's working hours to minimize disruption.
+  </Accordion>
+
+  <Accordion title="Monitor update compliance">
+    Regularly review update compliance reports to identify devices with update issues.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Compliance Policies](/resources/device-management/compliance-policies)
+- [Configuration Policies](/resources/device-management/configuration-policies)
+- [Assignment Filters](/resources/device-management/enrollment)

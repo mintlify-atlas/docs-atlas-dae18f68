@@ -1,0 +1,661 @@
+---
+title: Graph API Versions
+description: Understanding Microsoft Graph v1.0 and beta endpoints, stability considerations, and when to use each version
+---
+
+The Microsoft 365 Terraform Provider uses Microsoft Graph API to manage resources. Microsoft Graph provides two endpoint versions: **v1.0** (generally available) and **beta** (preview). Understanding the differences helps you make informed decisions about resource stability and feature availability.
+
+## API Version Overview
+
+Microsoft Graph exposes two parallel API versions:
+
+<CardGroup cols={2}>
+  <Card title="v1.0 - Generally Available" icon="check-circle">
+    Production-ready APIs with stability guarantees and backwards compatibility
+  </Card>
+  
+  <Card title="beta - Preview" icon="flask">
+    Preview APIs with latest features but subject to breaking changes
+  </Card>
+</CardGroup>
+
+### Version Comparison
+
+| Aspect | v1.0 | beta |
+|--------|------|------|
+| **Stability** | Guaranteed stable | Subject to breaking changes |
+| **Breaking Changes** | Only with new major version | Can change at any time |
+| **Feature Availability** | Generally available features | Latest and preview features |
+| **Support** | Full Microsoft support | Limited preview support |
+| **Use Case** | Production workloads | Testing, early adoption |
+| **Deprecation** | Advance notice (>12 months) | Can be removed without notice |
+
+## Resource Naming Convention
+
+The provider uses a clear naming convention to indicate which API version a resource uses:
+
+### Beta Resources
+
+Resources using Microsoft Graph **beta** endpoints include `graph_beta` in their name:
+
+```hcl
+# Uses beta endpoint: https://graph.microsoft.com/beta/groups
+resource "microsoft365_graph_beta_groups_group" "engineering" {
+  display_name     = "Engineering Team"
+  mail_nickname    = "engineering-team"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+```
+
+### v1.0 Resources
+
+Resources using Microsoft Graph **v1.0** endpoints include `graph_v1` in their name:
+
+```hcl
+# Uses v1.0 endpoint: https://graph.microsoft.com/v1.0/users
+resource "microsoft365_graph_v1_users_user" "john_doe" {
+  display_name        = "John Doe"
+  user_principal_name = "john.doe@contoso.com"
+  account_enabled     = true
+}
+```
+
+<Note>
+Currently, most provider resources use the **beta** API version to provide access to the latest Microsoft 365 features. v1.0 resources are being gradually added for production workloads requiring maximum stability.
+</Note>
+
+## Directory Structure
+
+The provider's source code organizes resources by API version:
+
+```bash
+internal/services/resources/
+├── applications/
+│   ├── graph_beta/          # Beta endpoint resources
+│   │   ├── application/
+│   │   ├── service_principal/
+│   │   └── ...
+│   └── graph_v1.0/          # v1.0 endpoint resources
+│       └── (coming soon)
+├── device_and_app_management/
+│   ├── graph_beta/          # Most Intune resources use beta
+│   │   ├── win32_app/
+│   │   ├── compliance_policy/
+│   │   └── ...
+│   └── graph_v1.0/          # Limited v1.0 coverage for Intune
+│       └── ...
+└── groups/
+    ├── graph_beta/          # Beta group management
+    └── graph_v1.0/          # Stable group management (planned)
+```
+
+## API Endpoint URLs
+
+Each resource uses a specific base URL:
+
+### Beta Endpoints
+
+```bash
+https://graph.microsoft.com/beta/{resource-path}
+```
+
+**Examples:**
+```bash
+# Groups
+POST https://graph.microsoft.com/beta/groups
+GET  https://graph.microsoft.com/beta/groups/{id}
+
+# Conditional Access
+GET  https://graph.microsoft.com/beta/identity/conditionalAccess/policies
+POST https://graph.microsoft.com/beta/identity/conditionalAccess/policies
+
+# Intune Win32 Apps
+POST https://graph.microsoft.com/beta/deviceAppManagement/mobileApps
+GET  https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/{id}
+```
+
+### v1.0 Endpoints
+
+```bash
+https://graph.microsoft.com/v1.0/{resource-path}
+```
+
+**Examples:**
+```bash
+# Users
+POST https://graph.microsoft.com/v1.0/users
+GET  https://graph.microsoft.com/v1.0/users/{id}
+
+# Groups
+POST https://graph.microsoft.com/v1.0/groups
+GET  https://graph.microsoft.com/v1.0/groups/{id}
+```
+
+## When to Use Each Version
+
+### Use v1.0 When:
+
+<AccordionGroup>
+  <Accordion title="Production workloads requiring stability">
+    Production environments where breaking changes are unacceptable:
+    
+    ```hcl
+    # Stable user management for production
+    resource "microsoft365_graph_v1_users_user" "production_user" {
+      display_name        = "Production Service Account"
+      user_principal_name = "prod-svc@contoso.com"
+      account_enabled     = true
+      # v1.0 guarantees this schema won't change
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Compliance and regulatory requirements">
+    Environments with strict change management and compliance requirements:
+    
+    - Regulated industries (finance, healthcare, government)
+    - SOC 2, ISO 27001, or similar compliance frameworks
+    - Environments requiring Microsoft support SLAs
+  </Accordion>
+  
+  <Accordion title="Long-term maintenance">
+    Configurations that will be maintained for years with minimal changes:
+    
+    - Core identity infrastructure
+    - Foundational security policies
+    - Long-lived automation and integration
+  </Accordion>
+  
+  <Accordion title="Risk-averse organizations">
+    Organizations with low tolerance for unexpected changes:
+    
+    - Large enterprises with complex change approval processes
+    - Multi-tenant environments managed by service providers
+    - Critical infrastructure deployments
+  </Accordion>
+</AccordionGroup>
+
+### Use Beta When:
+
+<AccordionGroup>
+  <Accordion title="Latest features required">
+    You need features only available in beta:
+    
+    ```hcl
+    # Many Intune features are beta-only
+    resource "microsoft365_graph_beta_device_and_app_management_win32_app" "app" {
+      display_name = "Enterprise Application"
+      # Advanced Win32 app features only in beta
+      detection_rules = [
+        {
+          rule_type = "file"
+          detection_type = "exists"
+          path = "C:\\Program Files\\App"
+          file_or_folder_name = "app.exe"
+        }
+      ]
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Intune device and app management">
+    Most Intune capabilities are only available in beta:
+    
+    - Device configuration policies
+    - App protection policies  
+    - Compliance policies
+    - Conditional launch settings
+    - Advanced application management
+    
+    ```hcl
+    # Settings catalog policies are beta-only
+    resource "microsoft365_graph_beta_device_management_settings_catalog_configuration_policy" "security" {
+      name         = "Security Baseline"
+      platforms    = "windows10"
+      technologies = "mdm"
+      settings     = [ /* ... */ ]
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Early adoption and testing">
+    Testing new features before they reach general availability:
+    
+    - Development and staging environments
+    - Proof of concept deployments
+    - Evaluating upcoming features
+  </Accordion>
+  
+  <Accordion title="Advanced security features">
+    Many advanced security features are beta-only:
+    
+    - Custom security attributes
+    - Advanced conditional access conditions
+    - Authentication strength policies
+    - Continuous access evaluation
+  </Accordion>
+</AccordionGroup>
+
+## Feature Availability
+
+### Beta-Only Features
+
+Some features are currently **only available** in beta:
+
+**Intune:**
+- Win32 app management with content upload
+- Settings catalog configuration policies
+- Advanced app configuration policies
+- Proactive remediation scripts
+- macOS platform scripts
+- App supersedence relationships
+
+**Identity & Access:**
+- Custom security attributes
+- Authentication strength policies  
+- Named locations (IP ranges, countries)
+- Advanced conditional access conditions
+
+**Applications:**
+- Federated identity credentials
+- Application templates
+- Service principal delegated permission grants
+- On-premises publishing configuration
+
+### Available in Both
+
+Some features are available in both versions:
+
+**Core Identity:**
+- User management (CRUD operations)
+- Group management (basic operations)
+- Application registrations (basic)
+- Service principals (basic)
+
+<Note>
+When a feature is available in both versions, consider using v1.0 for production stability unless you need beta-exclusive attributes.
+</Note>
+
+## Stability Considerations
+
+### Breaking Changes in Beta
+
+Beta APIs can introduce breaking changes without notice:
+
+**Example breaking changes:**
+```hcl
+# Week 1: Beta API accepts this schema
+resource "microsoft365_graph_beta_example_resource" "test" {
+  setting_name = "value"  # This attribute works
+}
+
+# Week 2: Beta API changes schema (breaking change)
+resource "microsoft365_graph_beta_example_resource" "test" {
+  setting_name = "value"  # ERROR: attribute removed/renamed
+  new_setting_name = "value"  # Now required
+}
+```
+
+<Warning>
+Beta API changes can break your Terraform configuration without warning. Always test beta resources in non-production environments before deploying to production.
+</Warning>
+
+### Deprecation Policies
+
+**v1.0 (Stable):**
+- Breaking changes only in new major API version
+- Minimum 12-month deprecation notice
+- Migration guidance provided
+- Documented upgrade paths
+
+**Beta (Preview):**
+- No deprecation notice required
+- Features can be removed or changed at any time
+- No guaranteed migration path
+- Limited documentation for changes
+
+## Migration Between Versions
+
+### Beta to v1.0 Migration
+
+When a feature graduates from beta to v1.0, you may want to migrate:
+
+**Step 1: Identify resource for migration**
+
+```hcl
+# Current: Using beta
+resource "microsoft365_graph_beta_groups_group" "engineering" {
+  display_name     = "Engineering Team"
+  mail_nickname    = "engineering-team"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+```
+
+**Step 2: Check v1.0 resource availability**
+
+Verify the v1.0 resource exists and supports all required features.
+
+**Step 3: Create v1.0 resource with import**
+
+```hcl
+# New: Using v1.0
+resource "microsoft365_graph_v1_groups_group" "engineering" {
+  display_name     = "Engineering Team"
+  mail_nickname    = "engineering-team"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+```
+
+```bash
+# Import the existing group into new resource
+terraform import microsoft365_graph_v1_groups_group.engineering <group-id>
+
+# Remove old beta resource from state
+terraform state rm microsoft365_graph_beta_groups_group.engineering
+```
+
+**Step 4: Verify no changes**
+
+```bash
+terraform plan  # Should show no changes
+```
+
+<Note>
+Migration between API versions requires careful planning. The resource ID typically remains the same, but the resource type in state changes.
+</Note>
+
+## Best Practices
+
+### 1. Use Beta for Development, v1.0 for Production
+
+```hcl
+# Development environment - latest features
+resource "microsoft365_graph_beta_groups_group" "dev_group" {
+  display_name = "Development Team"
+  # ... beta-exclusive features ...
+}
+
+# Production environment - stability
+resource "microsoft365_graph_v1_groups_group" "prod_group" {
+  display_name = "Production Team"  
+  # ... stable v1.0 features only ...
+}
+```
+
+### 2. Document API Version Dependencies
+
+```hcl
+# Document why beta is required
+resource "microsoft365_graph_beta_device_and_app_management_win32_app" "app" {
+  # Using beta because:
+  # - Win32 app content upload requires beta API
+  # - Detection rules are beta-only
+  # - No v1.0 alternative exists as of 2026-03
+  
+  display_name = "Corporate App"
+  # ...
+}
+```
+
+### 3. Pin Provider Versions
+
+```hcl
+terraform {
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"  # Pin to minor version
+    }
+  }
+}
+```
+
+Pinning provider versions protects against beta API changes propagating to your infrastructure.
+
+### 4. Test Beta Resources Thoroughly
+
+```hcl
+# Always test in non-production first
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "test_policy" {
+  display_name = "Test MFA Policy"
+  state        = "enabledForReportingButNotEnforced"  # Test mode
+  # ...
+}
+```
+
+### 5. Monitor Microsoft Graph Changelog
+
+Regularly review the [Microsoft Graph changelog](https://learn.microsoft.com/en-us/graph/changelog) for:
+- Beta API changes
+- Features graduating to v1.0
+- Deprecated beta endpoints
+- Breaking changes
+
+### 6. Plan for Beta Changes
+
+```hcl
+# Use lifecycle block to manage beta resources carefully
+resource "microsoft365_graph_beta_device_and_app_management_win32_app" "app" {
+  display_name = "Application"
+  # ...
+
+  lifecycle {
+    # Prevent accidental deletion if beta changes break plan
+    prevent_destroy = true
+  }
+}
+```
+
+## Checking API Version
+
+You can verify which API version a resource uses:
+
+### From Resource Name
+
+```hcl
+# Beta - contains "graph_beta"
+microsoft365_graph_beta_groups_group
+microsoft365_graph_beta_device_and_app_management_win32_app
+microsoft365_graph_beta_identity_and_access_conditional_access_policy
+
+# v1.0 - contains "graph_v1"
+microsoft365_graph_v1_users_user
+microsoft365_graph_v1_groups_group
+```
+
+### From Provider Documentation
+
+Check the [provider registry](https://registry.terraform.io/providers/deploymenttheory/microsoft365/latest/docs) for API version information.
+
+### From Source Code
+
+```bash
+# Check source directory structure
+ls internal/services/resources/applications/
+# Output shows: graph_beta/ and graph_v1.0/
+```
+
+## Common Scenarios
+
+### Scenario 1: Intune Management
+
+**Requirement:** Manage Windows devices with Intune
+
+**Solution:** Use beta - most Intune features are beta-only
+
+```hcl
+# No choice - must use beta for Intune
+resource "microsoft365_graph_beta_device_and_app_management_win32_app" "app" {
+  display_name = "Enterprise App"
+  # Beta-exclusive Intune features
+}
+
+resource "microsoft365_graph_beta_device_management_settings_catalog_configuration_policy" "policy" {
+  name         = "Security Settings"
+  platforms    = "windows10"
+  technologies = "mdm"
+  # Beta-only settings catalog
+}
+```
+
+### Scenario 2: User and Group Management
+
+**Requirement:** Manage users and groups for production environment
+
+**Solution:** Use v1.0 when available for stability
+
+```hcl
+# v1.0 for production user management (when available)
+resource "microsoft365_graph_v1_users_user" "prod_user" {
+  display_name        = "Production User"
+  user_principal_name = "user@contoso.com"
+  account_enabled     = true
+}
+
+# Currently use beta until v1.0 resources are available
+resource "microsoft365_graph_beta_users_user" "user" {
+  display_name        = "User"
+  user_principal_name = "user@contoso.com"
+  account_enabled     = true
+}
+```
+
+### Scenario 3: Advanced Security
+
+**Requirement:** Implement custom security attributes
+
+**Solution:** Use beta - feature not in v1.0
+
+```hcl
+# Beta required for custom security attributes
+resource "microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition" "project_code" {
+  attribute_set = "Engineering"
+  name          = "ProjectCode"
+  description   = "Project assignment code"
+  type          = "String"
+  # Custom security attributes are beta-only
+}
+```
+
+### Scenario 4: Conditional Access
+
+**Requirement:** Create conditional access policies
+
+**Solution:** Use beta for full feature set
+
+```hcl
+# Beta for advanced conditional access features
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "mfa" {
+  display_name = "Require MFA"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+    }
+    applications = {
+      include_applications = ["All"]
+    }
+    # Advanced conditions available in beta
+    authentication_flows = {
+      transfer_methods = "none"
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["mfa"]
+    authentication_strength = {
+      id = "00000000-0000-0000-0000-000000000002"  # Beta feature
+    }
+  }
+}
+```
+
+## Provider Roadmap
+
+The provider team is actively working on:
+
+<Steps>
+  <Step title="Expand v1.0 Coverage">
+    Adding v1.0 resources for core functionality (users, groups, applications)
+  </Step>
+  <Step title="Dual API Support">
+    Supporting both v1.0 and beta versions of the same resource
+  </Step>
+  <Step title="Migration Utilities">
+    Tools to help migrate from beta to v1.0 resources
+  </Step>
+  <Step title="API Version Documentation">
+    Clear documentation of which features require beta vs v1.0
+  </Step>
+</Steps>
+
+<Note>
+Check the [provider roadmap](/reference/provider-roadmap) for the latest information on v1.0 resource availability.
+</Note>
+
+## Troubleshooting
+
+### Resource Not Found in v1.0
+
+**Problem:** You need a resource but only beta version exists
+
+**Solution:** Use beta version and plan for future migration:
+
+```hcl
+# Use beta now, migrate to v1.0 later when available
+resource "microsoft365_graph_beta_groups_group" "group" {
+  display_name = "Team"
+  # ... configuration ...
+  
+  # Document planned migration
+  # TODO: Migrate to graph_v1 when available
+}
+```
+
+### Beta API Change Broke Configuration
+
+**Problem:** Terraform plan fails after beta API changed
+
+**Solution:**
+1. Check [Microsoft Graph changelog](https://learn.microsoft.com/en-us/graph/changelog)
+2. Review provider release notes
+3. Update configuration to match new schema
+4. Consider pinning provider version temporarily
+
+### Uncertain Which Version to Use
+
+**Problem:** Both beta and v1.0 resources exist
+
+**Decision matrix:**
+- Production + stability required → v1.0
+- Latest features required → beta  
+- Intune resources → beta (usually only option)
+- Core identity resources → v1.0 (when available)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Resource Management" icon="sitemap" href="/concepts/resource-management">
+    Learn about CRUD operations and resource lifecycle
+  </Card>
+  
+  <Card title="State Management" icon="database" href="/concepts/state-management">
+    Understand Terraform state for Microsoft 365 resources
+  </Card>
+  
+  <Card title="Provider Roadmap" icon="map" href="/reference/provider-roadmap">
+    See planned v1.0 resource additions
+  </Card>
+  
+  <Card title="Known Issues" icon="triangle-exclamation" href="/reference/known-issues">
+    Review known beta API issues and workarounds
+  </Card>
+</CardGroup>

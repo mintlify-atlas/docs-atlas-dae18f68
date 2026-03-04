@@ -1,0 +1,630 @@
+---
+title: Disaster recovery and backup
+description: Disaster recovery and backup strategies for Microsoft 365 configurations managed with Terraform
+---
+
+This guide covers disaster recovery strategies, backup approaches, and recovery procedures for Microsoft 365 configurations managed with Terraform. Learn how to protect your infrastructure-as-code and rapidly recover from configuration loss, tenant corruption, or accidental deletion.
+
+## Overview
+
+When managing Microsoft 365 with Terraform, your disaster recovery strategy must address:
+
+- **Terraform state backup and recovery** - Protecting your source of truth
+- **Configuration code versioning** - Version control for `.tf` files
+- **Resource configuration backup** - Point-in-time snapshots of deployed resources
+- **Credential recovery** - Secure backup of authentication credentials
+- **Multi-region resilience** - Geographic distribution for business continuity
+
+<Warning>
+Microsoft 365 tenants do not have native "restore to point in time" capabilities for all configuration types. Terraform becomes your primary disaster recovery mechanism for configuration-as-code.
+</Warning>
+
+## Understanding the disaster recovery scope
+
+### What Terraform protects
+
+<CardGroup cols={2}>
+  <Card title="Configuration policies" icon="shield">
+    - Conditional Access policies
+    - Compliance policies
+    - Device configuration profiles
+    - App protection policies
+  </Card>
+  
+  <Card title="Identity resources" icon="users">
+    - Group definitions and memberships
+    - Named locations
+    - Authentication strength policies
+    - Custom security attributes
+  </Card>
+  
+  <Card title="Intune resources" icon="mobile">
+    - Device enrollment configurations
+    - App assignments
+    - Update rings
+    - PowerShell scripts
+  </Card>
+  
+  <Card title="Organizational structure" icon="sitemap">
+    - Administrative units
+    - Role assignments
+    - Settings catalog policies
+    - Application registrations
+  </Card>
+</CardGroup>
+
+### What Terraform does NOT protect
+
+<Warning>
+Terraform manages **configuration**, not **data**. The following require separate backup strategies:
+
+- **User data**: Email, OneDrive files, SharePoint content
+- **Historical data**: Audit logs, sign-in logs, compliance reports
+- **License assignments**: User-to-license mappings (unless managed via Terraform)
+- **External identities**: B2B guest users, external access configurations
+- **Tenant settings**: Some global tenant settings not exposed via Graph API
+</Warning>
+
+For comprehensive Microsoft 365 backup including user data, consider third-party backup solutions (Veeam, AvePoint, Commvault) alongside your Terraform disaster recovery strategy.
+
+## State file backup strategies
+
+The Terraform state file is your most critical asset for disaster recovery. Loss of state means loss of resource tracking and potential configuration drift.
+
+### Strategy 1: Remote state with versioning (Recommended)
+
+<Tabs>
+  <Tab title="Azure Storage">
+    ```hcl
+    terraform {
+      backend "azurerm" {
+        resource_group_name  = "terraform-state-rg"
+        storage_account_name = "tfstateproduction"
+        container_name       = "tfstate"
+        key                  = "m365.terraform.tfstate"
+        
+        # Enable versioning and soft delete in Azure Storage Account
+      }
+    }
+    ```
+    
+    **Enable versioning in Azure Storage:**
+    ```bash
+    # Enable blob versioning
+    az storage account blob-service-properties update \
+      --account-name tfstateproduction \
+      --enable-versioning true
+    
+    # Enable soft delete (retain deleted blobs for 30 days)
+    az storage account blob-service-properties update \
+      --account-name tfstateproduction \
+      --enable-delete-retention true \
+      --delete-retention-days 30
+    ```
+  </Tab>
+  
+  <Tab title="Terraform Cloud">
+    ```hcl
+    terraform {
+      cloud {
+        organization = "my-organization"
+        
+        workspaces {
+          name = "m365-production"
+        }
+      }
+    }
+    ```
+    
+    **Benefits:**
+    - Automatic state versioning (full history)
+    - Point-in-time state recovery
+    - Built-in state locking
+    - Encrypted at rest
+    - No manual backup configuration required
+    
+    **Recovery:**
+    ```bash
+    # List state versions
+    terraform state list
+    
+    # Rollback to previous version via UI or API
+    # Terraform Cloud UI → Workspace → States → Select version → Restore
+    ```
+  </Tab>
+  
+  <Tab title="S3 with Versioning">
+    ```hcl
+    terraform {
+      backend "s3" {
+        bucket         = "my-terraform-state"
+        key            = "m365/terraform.tfstate"
+        region         = "us-east-1"
+        encrypt        = true
+        dynamodb_table = "terraform-state-lock"
+        
+        # Requires versioning enabled on S3 bucket
+      }
+    }
+    ```
+    
+    **Enable versioning on S3 bucket:**
+    ```bash
+    aws s3api put-bucket-versioning \
+      --bucket my-terraform-state \
+      --versioning-configuration Status=Enabled
+    
+    # Enable lifecycle policy to retain versions
+    # Delete noncurrent versions after 90 days
+    ```
+  </Tab>
+</Tabs>
+
+### Strategy 2: Automated state backups
+
+Schedule regular state file backups to secondary storage:
+
+```bash backup-state.sh
+#!/bin/bash
+# Schedule via cron: 0 */6 * * * /path/to/backup-state.sh
+
+BACKUP_DIR="/secure/terraform-backups/m365"
+DATE=$(date +%Y%m%d-%H%M%S)
+
+# Pull current state
+terraform state pull > "${BACKUP_DIR}/terraform-${DATE}.tfstate"
+
+# Compress and encrypt
+tar -czf - "${BACKUP_DIR}/terraform-${DATE}.tfstate" | \
+  gpg --encrypt --recipient backup@company.com > \
+  "${BACKUP_DIR}/terraform-${DATE}.tfstate.tar.gz.gpg"
+
+# Remove unencrypted backup
+rm "${BACKUP_DIR}/terraform-${DATE}.tfstate"
+
+# Retain last 30 days of backups
+find "${BACKUP_DIR}" -name "terraform-*.tfstate.tar.gz.gpg" -mtime +30 -delete
+
+echo "State backup completed: ${DATE}"
+```
+
+<Note>
+**Best practice:** Store state backups in a different geographic region and different cloud provider than your primary state backend for maximum resilience.
+</Note>
+
+## Configuration code backup
+
+Your Terraform configuration files (`.tf`, `.tfvars`) must be version controlled and backed up.
+
+### Version control best practices
+
+<Steps>
+  <Step title="Use Git with remote repositories">
+    ```bash
+    # Initialize Git repository
+    git init
+    git add *.tf *.md
+    git commit -m "Initial Microsoft 365 Terraform configuration"
+    
+    # Push to remote (GitHub, GitLab, Azure DevOps)
+    git remote add origin https://github.com/org/m365-terraform.git
+    git push -u origin main
+    ```
+  </Step>
+  
+  <Step title="Implement branch protection">
+    - Require pull request reviews before merge
+    - Enforce status checks (terraform validate, terraform plan)
+    - Prevent force pushes to main/production branches
+    - Require signed commits
+  </Step>
+  
+  <Step title="Tag releases for rollback points">
+    ```bash
+    # Tag stable configurations
+    git tag -a v1.0.0 -m "Production release - 2024-03-01"
+    git push origin v1.0.0
+    
+    # Rollback to previous version
+    git checkout v1.0.0
+    terraform apply
+    ```
+  </Step>
+  
+  <Step title="Mirror repositories across providers">
+    ```bash
+    # Primary: GitHub
+    git remote add github https://github.com/org/m365-terraform.git
+    
+    # Mirror: GitLab
+    git remote add gitlab https://gitlab.com/org/m365-terraform.git
+    
+    # Mirror: Azure DevOps
+    git remote add azure https://dev.azure.com/org/project/_git/m365-terraform
+    
+    # Push to all remotes
+    git push --all github gitlab azure
+    ```
+  </Step>
+</Steps>
+
+### .gitignore for security
+
+```gitignore .gitignore
+# Terraform state files (use remote backend instead)
+*.tfstate
+*.tfstate.*
+terraform.tfstate.backup
+
+# Sensitive variable files
+*.tfvars
+!terraform.tfvars.example
+secrets.auto.tfvars
+
+# Terraform directories
+.terraform/
+.terraform.lock.hcl
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# Environment files
+.env
+.env.local
+```
+
+## Recovery scenarios and procedures
+
+### Scenario 1: Accidental resource deletion
+
+**Symptom**: Critical conditional access policy accidentally deleted via Azure portal
+
+<Steps>
+  <Step title="Identify deleted resource">
+    ```bash
+    # Run terraform plan to detect drift
+    terraform plan -parallelism=1
+    
+    # Output shows resource missing from tenant:
+    # Plan: 1 to add, 0 to change, 0 to destroy.
+    ```
+  </Step>
+  
+  <Step title="Restore from Terraform">
+    ```bash
+    # Re-apply configuration to recreate resource
+    terraform apply -parallelism=1
+    
+    # Terraform will recreate the deleted resource with same configuration
+    ```
+  </Step>
+  
+  <Step title="Verify restoration">
+    ```bash
+    # Confirm resource restored
+    terraform plan -parallelism=1
+    # Output: No changes. Your infrastructure matches the configuration.
+    ```
+  </Step>
+</Steps>
+
+**Prevention**: Enable Azure AD audit logs and set up alerts for policy deletions.
+
+### Scenario 2: Corrupted Terraform state
+
+**Symptom**: Terraform state file corrupted, showing resources that don't exist or missing known resources
+
+<Steps>
+  <Step title="Stop all Terraform operations">
+    Prevent concurrent operations from worsening corruption
+  </Step>
+  
+  <Step title="Restore from backup">
+    ```bash
+    # For Terraform Cloud
+    # UI → Workspace → States → Select previous version → Restore
+    
+    # For Azure Storage with versioning
+    az storage blob download \
+      --account-name tfstateproduction \
+      --container-name tfstate \
+      --name m365.terraform.tfstate \
+      --version-id <previous-version-id> \
+      --file terraform.tfstate.backup
+    
+    # Push restored state
+    terraform state push terraform.tfstate.backup
+    ```
+  </Step>
+  
+  <Step title="Verify state integrity">
+    ```bash
+    # Validate state
+    terraform validate
+    
+    # Check plan
+    terraform plan -parallelism=1
+    
+    # Ensure no unexpected changes
+    ```
+  </Step>
+</Steps>
+
+### Scenario 3: Complete tenant loss (catastrophic)
+
+**Symptom**: Microsoft 365 tenant deleted, corrupted, or requires complete rebuild
+
+<Steps>
+  <Step title="Provision new tenant">
+    - Create new Microsoft 365 tenant
+    - Configure basic tenant settings
+    - Create service principal for Terraform
+  </Step>
+  
+  <Step title="Update Terraform configuration">
+    ```hcl
+    # Update tenant_id in variables
+    variable "tenant_id" {
+      default = "<new-tenant-id>"
+    }
+    
+    # Update provider configuration
+    provider "microsoft365" {
+      tenant_id = var.tenant_id
+      # ... rest of config
+    }
+    ```
+  </Step>
+  
+  <Step title="Initialize new state">
+    ```bash
+    # Remove existing state (backed up separately)
+    rm -rf .terraform/
+    
+    # Initialize with new backend
+    terraform init
+    ```
+  </Step>
+  
+  <Step title="Deploy from code">
+    ```bash
+    # Preview deployment
+    terraform plan -parallelism=1
+    
+    # Deploy all resources to new tenant
+    terraform apply -parallelism=1 -auto-approve
+    
+    # Expected duration: 30-90 minutes for typical deployment
+    ```
+  </Step>
+  
+  <Step title="Verify and test">
+    - Test conditional access policies
+    - Verify group memberships
+    - Validate Intune configurations
+    - Test user sign-in flows
+  </Step>
+</Steps>
+
+**Recovery time objective (RTO)**: 2-4 hours for complete tenant rebuild from Terraform code
+
+### Scenario 4: Configuration drift detection and correction
+
+**Symptom**: Resources modified outside Terraform (via Azure portal, PowerShell, Graph API)
+
+```bash
+# Detect drift
+terraform plan -refresh-only -parallelism=1
+
+# Review detected changes
+# Terraform will show all configuration differences
+
+# Option 1: Revert to Terraform-defined state
+terraform apply -parallelism=1
+
+# Option 2: Accept drift and update Terraform code
+# Edit .tf files to match current state, then:
+terraform plan -parallelism=1  # Should show no changes
+
+# Option 3: Refresh state without applying changes
+terraform apply -refresh-only -parallelism=1
+```
+
+**Prevention**: Implement continuous drift detection via scheduled CI/CD jobs.
+
+## Backup automation with CI/CD
+
+### GitHub Actions scheduled backup
+
+```yaml .github/workflows/backup-state.yml
+name: Backup Terraform State
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.0
+      
+      - name: Pull current state
+        run: terraform state pull > terraform-$(date +%Y%m%d-%H%M%S).tfstate
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Upload to artifact storage
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-state-backup-${{ github.run_number }}
+          path: terraform-*.tfstate
+          retention-days: 90
+      
+      - name: Upload to secondary storage
+        run: |
+          # Upload to S3, Azure Blob, etc.
+          az storage blob upload \
+            --account-name backupstorage \
+            --container-name terraform-backups \
+            --name m365/terraform-$(date +%Y%m%d-%H%M%S).tfstate \
+            --file terraform-*.tfstate
+```
+
+### Continuous drift detection
+
+```yaml .github/workflows/drift-detection.yml
+name: Detect Configuration Drift
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Daily at 8 AM UTC
+  workflow_dispatch:
+
+jobs:
+  detect-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: hashicorp/setup-terraform@v3
+      
+      - name: Terraform Init
+        run: terraform init
+      
+      - name: Detect Drift
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -parallelism=1 > plan_output.txt
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+      
+      - name: Post drift alert
+        if: steps.plan.outputs.exit_code == '2'
+        run: |
+          # Send alert to Slack, Teams, email, etc.
+          curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Configuration drift detected in M365 Terraform!"}'
+      
+      - name: Upload drift report
+        if: steps.plan.outputs.exit_code == '2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report-${{ github.run_number }}
+          path: plan_output.txt
+```
+
+## Recovery testing
+
+<Warning>
+A disaster recovery plan is only as good as its last successful test. Schedule regular recovery drills.
+</Warning>
+
+### Quarterly recovery drill checklist
+
+<Steps>
+  <Step title="State recovery test">
+    - Restore state from 7-day-old backup
+    - Run `terraform plan` to verify consistency
+    - Document time to restore: ___ minutes
+  </Step>
+  
+  <Step title="Configuration rollback test">
+    - Checkout Git tag from 30 days ago
+    - Deploy to test tenant
+    - Verify all resources created successfully
+    - Document deployment time: ___ minutes
+  </Step>
+  
+  <Step title="Tenant rebuild simulation">
+    - Provision new test tenant
+    - Deploy full Terraform configuration from scratch
+    - Verify functionality of all components
+    - Document total recovery time: ___ hours
+  </Step>
+  
+  <Step title="Credential recovery test">
+    - Retrieve credentials from backup vault
+    - Authenticate to test tenant
+    - Run Terraform operations
+    - Document credential recovery time: ___ minutes
+  </Step>
+</Steps>
+
+## Best practices summary
+
+<AccordionGroup>
+  <Accordion title="The 3-2-1 backup rule">
+    - **3 copies** of state and configuration (production + 2 backups)
+    - **2 different storage types** (cloud storage + Git repositories)
+    - **1 offsite/geographic copy** (different region/cloud provider)
+  </Accordion>
+  
+  <Accordion title="Automate everything">
+    - Scheduled state backups (every 6 hours minimum)
+    - Continuous drift detection (daily)
+    - Automated alerts for changes or drift
+    - Backup verification tests (weekly)
+  </Accordion>
+  
+  <Accordion title="Document recovery procedures">
+    - Maintain runbooks for each recovery scenario
+    - Include step-by-step instructions
+    - Document RTO/RPO for each scenario
+    - Update after each recovery test
+  </Accordion>
+  
+  <Accordion title="Secure credential storage">
+    - Never commit credentials to Git
+    - Use separate secret management (Key Vault, Vault, etc.)
+    - Rotate credentials regularly
+    - Backup credentials to encrypted offline storage
+  </Accordion>
+  
+  <Accordion title="Test recovery regularly">
+    - Quarterly full recovery drills
+    - Monthly state restoration tests
+    - Annual tenant rebuild simulations
+    - Document results and improve procedures
+  </Accordion>
+</AccordionGroup>
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Terraform state" icon="database" href="https://developer.hashicorp.com/terraform/language/state">
+    Official Terraform state documentation
+  </Card>
+  
+  <Card title="Remote backends" icon="server" href="https://developer.hashicorp.com/terraform/language/settings/backends/configuration">
+    Configuring remote state backends
+  </Card>
+  
+  <Card title="Multi-tenant management" icon="building">
+    Managing multiple M365 tenants
+  </Card>
+  
+  <Card title="Workspace design" icon="diagram-project">
+    Workspace architecture patterns
+  </Card>
+</CardGroup>

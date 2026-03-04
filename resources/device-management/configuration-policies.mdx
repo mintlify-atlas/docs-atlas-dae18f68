@@ -1,0 +1,273 @@
+---
+title: Configuration Policies
+description: Device configuration policies for Windows, macOS, iOS, Android, and Linux
+---
+
+Configuration policies allow you to manage device settings and configurations across all platforms.
+
+## Available Resources
+
+### Settings Catalog (Recommended)
+
+<Card title="Settings Catalog Configuration Policy" icon="book">
+  **Resource**: `microsoft365_graph_beta_device_management_settings_catalog_configuration_policy`
+  
+  Modern, comprehensive configuration policies using the Settings Catalog.
+</Card>
+
+<Card title="Settings Catalog JSON" icon="code">
+  **Resource**: `microsoft365_graph_beta_device_management_settings_catalog_configuration_policy_json`
+  
+  Import/export settings catalog policies as JSON.
+</Card>
+
+### Platform-Specific Templates
+
+<CardGroup cols={2}>
+  <Card title="macOS Configuration Templates" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_management_macos_device_configuration_templates`
+  </Card>
+  
+  <Card title="Group Policy Configuration" icon="windows">
+    **Resource**: `microsoft365_graph_beta_device_management_group_policy_configuration`
+  </Card>
+</CardGroup>
+
+### Scripts
+
+<CardGroup cols={3}>
+  <Card title="Windows Remediation Script" icon="file-code">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_remediation_script`
+  </Card>
+  
+  <Card title="macOS Platform Script" icon="terminal">
+    **Resource**: `microsoft365_graph_beta_device_management_macos_platform_script`
+  </Card>
+  
+  <Card title="Linux Platform Script" icon="terminal">
+    **Resource**: `microsoft365_graph_beta_device_management_linux_platform_script`
+  </Card>
+  
+  <Card title="macOS Custom Attribute" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_management_macos_custom_attribute_script`
+  </Card>
+</CardGroup>
+
+## Settings Catalog Example
+
+```hcl
+resource "microsoft365_graph_beta_device_management_settings_catalog_configuration_policy" "security_baseline" {
+  name         = "Windows Security Baseline"
+  description  = "Security configuration for Windows 11 devices"
+  platforms    = "windows10"
+  technologies = "mdm"
+  
+  settings = [
+    # Enable Windows Defender Real-time Monitoring
+    {
+      setting_instance = {
+        setting_definition_id = "device_vendor_msft_policy_config_defender_allowrealtimemonitoring"
+        setting_value = {
+          value = "1"
+        }
+      }
+    },
+    # Configure BitLocker
+    {
+      setting_instance = {
+        setting_definition_id = "device_vendor_msft_bitlocker_requiredeviceencryption"
+        setting_value = {
+          value = "1"
+        }
+      }
+    },
+    # Configure Firewall
+    {
+      setting_instance = {
+        setting_definition_id = "device_vendor_msft_firewall_mdmstore_domainprofile_enablefirewall"
+        setting_value = {
+          value = "true"
+        }
+      }
+    }
+  ]
+}
+```
+
+## Group Policy Configuration
+
+```hcl
+resource "microsoft365_graph_beta_device_management_group_policy_configuration" "security_gpo" {
+  display_name = "Corporate Security GPO"
+  description  = "Group Policy configuration for domain-joined devices"
+  
+  # Configure specific policy settings
+}
+```
+
+## Windows Remediation Script
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_remediation_script" "disk_cleanup" {
+  display_name = "Disk Cleanup Script"
+  description  = "Automated disk cleanup for low disk space"
+  
+  # Detection script
+  detection_script_content = base64encode(<<-EOT
+    $freeSpace = (Get-PSDrive C).Free / 1GB
+    if ($freeSpace -lt 10) {
+        Write-Output "Low disk space detected: $freeSpace GB free"
+        exit 1  # Issue detected
+    }
+    exit 0  # No issue
+  EOT
+  )
+  
+  # Remediation script
+  remediation_script_content = base64encode(<<-EOT
+    # Clear Windows temp files
+    Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue
+    
+    # Clear Windows Update cache
+    Stop-Service -Name wuauserv -Force
+    Remove-Item -Path "C:\\Windows\\SoftwareDistribution\\Download\\*" -Recurse -Force -ErrorAction SilentlyContinue
+    Start-Service -Name wuauserv
+    
+    Write-Output "Disk cleanup completed"
+    exit 0
+  EOT
+  )
+  
+  run_as_account = "system"
+  enforce_signature_check = false
+  run_as_32_bit = false
+}
+```
+
+## macOS Platform Script
+
+```hcl
+resource "microsoft365_graph_beta_device_management_macos_platform_script" "setup" {
+  display_name = "macOS Setup Script"
+  description  = "Configure macOS devices after enrollment"
+  
+  script_content = base64encode(<<-EOT
+    #!/bin/bash
+    
+    # Configure system preferences
+    defaults write com.apple.screensaver askForPassword -int 1
+    defaults write com.apple.screensaver askForPasswordDelay -int 0
+    
+    # Install required software
+    # ...
+    
+    echo "Setup completed successfully"
+    exit 0
+  EOT
+  )
+  
+  run_as_account = "system"
+}
+```
+
+## macOS Custom Attribute Script
+
+```hcl
+resource "microsoft365_graph_beta_device_management_macos_custom_attribute_script" "custom_inventory" {
+  display_name = "Custom Inventory Data"
+  description  = "Collect custom inventory information"
+  
+  script_content = base64encode(<<-EOT
+    #!/bin/bash
+    
+    # Output custom attribute value
+    echo "CustomValue123"
+    exit 0
+  EOT
+  )
+}
+```
+
+## Linux Platform Script
+
+```hcl
+resource "microsoft365_graph_beta_device_management_linux_platform_script" "security_config" {
+  display_name = "Linux Security Configuration"
+  description  = "Apply security settings to Linux devices"
+  
+  script_content = base64encode(<<-EOT
+    #!/bin/bash
+    
+    # Update system packages
+    apt-get update -y
+    apt-get upgrade -y
+    
+    # Configure firewall
+    ufw enable
+    ufw default deny incoming
+    ufw default allow outgoing
+    
+    echo "Security configuration applied"
+    exit 0
+  EOT
+  )
+}
+```
+
+## macOS Software Update Configuration
+
+```hcl
+resource "microsoft365_graph_beta_device_management_macos_software_update_configuration" "auto_updates" {
+  display_name = "macOS Auto Updates"
+  description  = "Enable automatic updates for macOS devices"
+  
+  # Update settings
+  update_schedule_type = "alwaysUpdate"
+  
+  # Assignment
+  assignments = [
+    {
+      target = {
+        assignment_target_type = "allDevicesAssignmentTarget"
+      }
+    }
+  ]
+}
+```
+
+## Policy Assignment
+
+Assign configuration policies to targets:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_device_configuration_assignment" "baseline_assignment" {
+  device_configuration_id = microsoft365_graph_beta_device_management_settings_catalog_configuration_policy.security_baseline.id
+  
+  target = {
+    assignment_target_type = "groupAssignmentTarget"
+    group_id              = microsoft365_graph_beta_groups_group.windows_devices.id
+  }
+}
+```
+
+## Import Syntax
+
+```bash
+# Settings Catalog
+terraform import microsoft365_graph_beta_device_management_settings_catalog_configuration_policy.policy <policy-id>
+
+# Group Policy Configuration
+terraform import microsoft365_graph_beta_device_management_group_policy_configuration.gpo <policy-id>
+
+# Remediation Script
+terraform import microsoft365_graph_beta_device_management_windows_remediation_script.script <script-id>
+
+# macOS Script
+terraform import microsoft365_graph_beta_device_management_macos_platform_script.script <script-id>
+```
+
+## Related Resources
+
+- [Compliance Policies](/resources/device-management/compliance-policies)
+- [Windows Updates](/resources/device-management/windows-updates)
+- [Device Enrollment](/resources/device-management/enrollment)

@@ -1,0 +1,287 @@
+---
+title: Client Options
+description: Configure HTTP client behavior, retry logic, compression, and timeouts
+---
+
+The `client_options` block configures the behavior of the Microsoft Graph HTTP client used by the provider.
+
+## Basic Configuration
+
+```hcl
+provider "microsoft365" {
+  # ... authentication configuration ...
+  
+  client_options = {
+    enable_retry        = true
+    max_retries         = 3
+    retry_delay_seconds = 5
+    enable_compression  = true
+    timeout_seconds     = 300
+  }
+}
+```
+
+## Configuration Parameters
+
+### Retry Configuration
+
+<ParamField path="enable_retry" type="boolean" default="true">
+  Enable automatic retries for failed requests.
+  
+  When enabled, the provider will automatically retry requests that fail due to transient errors such as network timeouts or rate limiting.
+  
+  Can be set using the `M365_ENABLE_RETRY` environment variable.
+</ParamField>
+
+<ParamField path="max_retries" type="integer" default="3">
+  Maximum number of retries for failed requests.
+  
+  The provider will retry failed requests up to this many times before giving up. Retries use exponential backoff with jitter to avoid overwhelming the API.
+  
+  Can be set using the `M365_MAX_RETRIES` environment variable.
+</ParamField>
+
+<ParamField path="retry_delay_seconds" type="integer" default="5">
+  Base delay between retry attempts in seconds.
+  
+  The actual delay uses exponential backoff based on this value. For example, with a base delay of 5 seconds:
+  - 1st retry: ~5 seconds + jitter
+  - 2nd retry: ~10 seconds + jitter
+  - 3rd retry: ~20 seconds + jitter
+  
+  Can be set using the `M365_RETRY_DELAY_SECONDS` environment variable.
+</ParamField>
+
+**Retry Behavior:**
+- Automatic retries are triggered for the following HTTP status codes:
+  - `408` - Request Timeout
+  - `429` - Too Many Requests (Rate Limiting)
+  - `500` - Internal Server Error
+  - `502` - Bad Gateway
+  - `503` - Service Unavailable
+  - `504` - Gateway Timeout
+- Uses exponential backoff with jitter to prevent thundering herd problems
+- Maximum retry delay is 10x the base retry delay
+
+### Redirect Configuration
+
+<ParamField path="enable_redirect" type="boolean" default="true">
+  Enable automatic following of HTTP redirects.
+  
+  When enabled, the provider will automatically follow HTTP 3xx redirect responses.
+</ParamField>
+
+<ParamField path="max_redirects" type="integer" default="5">
+  Maximum number of redirects to follow.
+  
+  Prevents infinite redirect loops by limiting the number of consecutive redirects that will be followed.
+</ParamField>
+
+### Compression
+
+<ParamField path="enable_compression" type="boolean" default="true">
+  Enable compression for HTTP requests and responses.
+  
+  When enabled, the provider will use gzip compression for request and response bodies, reducing bandwidth usage and improving performance.
+  
+  Can be set using the `M365_ENABLE_COMPRESSION` environment variable.
+</ParamField>
+
+### Timeout
+
+<ParamField path="timeout_seconds" type="integer" default="300">
+  Timeout for HTTP requests in seconds.
+  
+  The maximum time to wait for a request to complete. Requests that exceed this timeout will be cancelled.
+  
+  Can be set using the `M365_TIMEOUT_SECONDS` environment variable.
+</ParamField>
+
+### Headers and Telemetry
+
+<ParamField path="enable_headers_inspection" type="boolean" default="false">
+  Enable inspection of HTTP headers.
+  
+  When enabled, the provider will log HTTP request and response headers for debugging purposes.
+  
+  Can be set using the `M365_ENABLE_HEADERS_INSPECTION` environment variable.
+</ParamField>
+
+<ParamField path="custom_user_agent" type="string">
+  Custom User-Agent string to be sent with requests.
+  
+  If not specified, the provider uses a default User-Agent that includes the provider version and Terraform version.
+  
+  Can be set using the `M365_CUSTOM_USER_AGENT` environment variable.
+</ParamField>
+
+## Complete Example
+
+```hcl
+provider "microsoft365" {
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+
+  client_options = {
+    # Retry configuration
+    enable_retry        = true
+    max_retries         = 5
+    retry_delay_seconds = 10
+    
+    # Redirect configuration
+    enable_redirect = true
+    max_redirects   = 5
+    
+    # Performance
+    enable_compression = true
+    timeout_seconds    = 600
+    
+    # Debugging
+    enable_headers_inspection = false
+    custom_user_agent         = "MyApp/1.0"
+  }
+}
+```
+
+## Using Environment Variables
+
+```bash
+# Retry configuration
+export M365_ENABLE_RETRY="true"
+export M365_MAX_RETRIES="5"
+export M365_RETRY_DELAY_SECONDS="10"
+
+# Redirect configuration
+export M365_ENABLE_REDIRECT="true"
+export M365_MAX_REDIRECTS="5"
+
+# Performance
+export M365_ENABLE_COMPRESSION="true"
+export M365_TIMEOUT_SECONDS="600"
+
+# Debugging
+export M365_ENABLE_HEADERS_INSPECTION="true"
+export M365_CUSTOM_USER_AGENT="MyApp/1.0"
+```
+
+## Chaos Testing (Development Only)
+
+<Warning>
+Chaos testing options are for development and testing purposes only. **Never enable in production environments.**
+</Warning>
+
+The provider includes chaos testing capabilities to simulate API failures and test error handling:
+
+<ParamField path="enable_chaos" type="boolean" default="false">
+  Enable the chaos handler for testing purposes.
+  
+  When enabled, the chaos handler simulates failure scenarios and random errors in API responses to test the robustness and resilience of your Terraform configurations.
+  
+  Can be set using the `M365_ENABLE_CHAOS` environment variable.
+</ParamField>
+
+<ParamField path="chaos_percentage" type="integer" default="10">
+  Percentage of requests to apply chaos testing to (0-100).
+  
+  Determines the probability of injecting chaos into each request. Higher values increase the frequency of simulated errors.
+  
+  Can be set using the `M365_CHAOS_PERCENTAGE` environment variable.
+</ParamField>
+
+<ParamField path="chaos_status_code" type="integer">
+  HTTP status code to return for chaos-affected requests.
+  
+  If not set, a random error status code will be used. Common error codes include:
+  - `429` - Too Many Requests
+  - `500` - Internal Server Error
+  - `503` - Service Unavailable
+  
+  Can be set using the `M365_CHAOS_STATUS_CODE` environment variable.
+</ParamField>
+
+<ParamField path="chaos_status_message" type="string">
+  Custom status message to return for chaos-affected requests.
+  
+  If not set, a default message will be used.
+  
+  Can be set using the `M365_CHAOS_STATUS_MESSAGE` environment variable.
+</ParamField>
+
+**Chaos Testing Example:**
+```hcl
+provider "microsoft365" {
+  # ... authentication configuration ...
+  
+  client_options = {
+    enable_chaos         = true
+    chaos_percentage     = 20  # 20% of requests will fail
+    chaos_status_code    = 503 # Simulate service unavailable
+    chaos_status_message = "Simulated server overload"
+  }
+}
+```
+
+## Recommended Configurations
+
+### Production Environment
+
+```hcl
+client_options = {
+  enable_retry        = true
+  max_retries         = 3
+  retry_delay_seconds = 5
+  enable_compression  = true
+  timeout_seconds     = 300
+  enable_chaos        = false  # Never enable in production
+}
+```
+
+### Development Environment
+
+```hcl
+client_options = {
+  enable_retry              = true
+  max_retries               = 5
+  retry_delay_seconds       = 2
+  enable_compression        = true
+  timeout_seconds           = 600
+  enable_headers_inspection = true  # For debugging
+}
+```
+
+### High-Volume Operations
+
+For environments with many resources or frequent API calls:
+
+```hcl
+client_options = {
+  enable_retry        = true
+  max_retries         = 5      # More retries for rate limiting
+  retry_delay_seconds = 10     # Longer delays to avoid rate limits
+  enable_compression  = true   # Reduce bandwidth usage
+  timeout_seconds     = 900    # Longer timeout for large operations
+}
+```
+
+## Best Practices
+
+<Card title="Enable Compression" icon="file-zipper">
+  Always enable compression in production to reduce bandwidth usage and improve performance.
+</Card>
+
+<Card title="Configure Retries" icon="rotate">
+  Enable retries with appropriate max_retries and retry_delay_seconds values to handle transient failures and rate limiting.
+</Card>
+
+<Card title="Set Reasonable Timeouts" icon="clock">
+  Configure timeout_seconds based on your workload. Large operations may require longer timeouts.
+</Card>
+
+<Card title="Use Environment Variables" icon="key">
+  Store client options as environment variables for easier management across environments.
+</Card>

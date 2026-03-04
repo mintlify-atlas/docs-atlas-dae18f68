@@ -1,0 +1,367 @@
+---
+title: Provider Configuration Schema
+description: Complete provider schema reference for Microsoft 365 Terraform Provider configuration
+---
+
+The Microsoft 365 Terraform Provider supports flexible configuration for authentication, cloud environments, and network settings.
+
+## Provider Block
+
+```hcl
+provider "microsoft365" {
+  # Cloud Environment
+  cloud          = "public"  # public, usgovernment, china
+  tenant_id      = "00000000-0000-0000-0000-000000000000"
+  
+  # Authentication
+  client_id      = "00000000-0000-0000-0000-000000000000"
+  client_secret  = var.client_secret  # Use variables for secrets
+  
+  # Network Configuration
+  enable_proxy   = false
+  proxy_url      = "http://proxy.example.com:8080"
+  
+  # API Configuration
+  use_graph_beta = true
+  timeout        = 60
+}
+```
+
+## Configuration Options
+
+### Cloud Environment
+
+<ParamField path="cloud" type="string" default="public">
+  The Microsoft cloud environment to use. Supported values:
+  - `public` - Microsoft Public Cloud (default)
+  - `usgovernment` - US Government Cloud (GCC, GCC High, DoD)
+  - `china` - Microsoft China Cloud (21Vianet)
+</ParamField>
+
+<ParamField path="tenant_id" type="string" required>
+  The Microsoft Entra ID (Azure AD) tenant ID (GUID) for your organization.
+</ParamField>
+
+### Authentication Configuration
+
+The provider supports multiple authentication methods:
+
+#### Client Credentials (Service Principal)
+
+<ParamField path="client_id" type="string">
+  The Application (client) ID of the Azure AD application/service principal.
+</ParamField>
+
+<ParamField path="client_secret" type="string">
+  The client secret for the Azure AD application. **Note:** Store secrets in variables or use secret management tools.
+</ParamField>
+
+<ParamField path="client_certificate_path" type="string">
+  Path to the client certificate file (.pfx or .p12) for certificate-based authentication.
+</ParamField>
+
+<ParamField path="client_certificate_password" type="string">
+  Password for the client certificate file (if encrypted).
+</ParamField>
+
+#### Interactive Authentication
+
+<ParamField path="use_device_code" type="boolean" default="false">
+  Enable device code flow for interactive authentication. Useful for development or when browser access is limited.
+</ParamField>
+
+<ParamField path="use_interactive_browser" type="boolean" default="false">
+  Enable interactive browser authentication. Opens a browser window for user login.
+</ParamField>
+
+#### Managed Identity
+
+<ParamField path="use_managed_identity" type="boolean" default="false">
+  Enable Azure Managed Identity authentication. Works on Azure VMs, App Services, and other Azure resources.
+</ParamField>
+
+<ParamField path="managed_identity_client_id" type="string">
+  The client ID of a user-assigned managed identity (optional, uses system-assigned if not specified).
+</ParamField>
+
+#### Workload Identity & OIDC
+
+<ParamField path="use_oidc" type="boolean" default="false">
+  Enable OpenID Connect (OIDC) authentication. Supports GitHub Actions and Azure DevOps workload identity federation.
+</ParamField>
+
+<ParamField path="oidc_token" type="string">
+  The OIDC token for workload identity federation.
+</ParamField>
+
+<ParamField path="oidc_token_file_path" type="string">
+  Path to a file containing the OIDC token.
+</ParamField>
+
+#### Azure Developer CLI
+
+<ParamField path="use_azure_cli" type="boolean" default="false">
+  Use credentials from the Azure Developer CLI (`azd`).
+</ParamField>
+
+### API Configuration
+
+<ParamField path="use_graph_beta" type="boolean" default="false">
+  Use the Microsoft Graph Beta API endpoint. Set to `true` to access preview features.
+  - `false` - Use Graph v1.0 API (generally available features)
+  - `true` - Use Graph Beta API (preview features)
+</ParamField>
+
+<ParamField path="timeout" type="number" default="60">
+  Default timeout in seconds for API requests. Individual resources may override this.
+</ParamField>
+
+<ParamField path="retry_max_attempts" type="number" default="3">
+  Maximum number of retry attempts for failed API requests (e.g., throttling, transient errors).
+</ParamField>
+
+<ParamField path="retry_delay" type="number" default="2">
+  Delay in seconds between retry attempts. Uses exponential backoff.
+</ParamField>
+
+### Network Configuration
+
+<ParamField path="enable_proxy" type="boolean" default="false">
+  Enable HTTP proxy for API requests.
+</ParamField>
+
+<ParamField path="proxy_url" type="string">
+  HTTP/HTTPS proxy URL (e.g., `http://proxy.example.com:8080`).
+</ParamField>
+
+<ParamField path="proxy_username" type="string">
+  Username for proxy authentication (if required).
+</ParamField>
+
+<ParamField path="proxy_password" type="string">
+  Password for proxy authentication (if required).
+</ParamField>
+
+<ParamField path="user_agent" type="string">
+  Custom User-Agent header for API requests. Useful for tracking or compliance.
+</ParamField>
+
+<ParamField path="disable_compression" type="boolean" default="false">
+  Disable HTTP response compression. May be useful for debugging.
+</ParamField>
+
+<ParamField path="max_redirects" type="number" default="5">
+  Maximum number of HTTP redirects to follow.
+</ParamField>
+
+### Telemetry & Logging
+
+<ParamField path="disable_telemetry" type="boolean" default="false">
+  Disable telemetry data collection sent to Microsoft.
+</ParamField>
+
+<ParamField path="enable_request_logging" type="boolean" default="false">
+  Enable detailed logging of HTTP requests/responses (for debugging). **Warning:** May log sensitive data.
+</ParamField>
+
+## Environment Variables
+
+All provider configuration options can be set via environment variables using the prefix `M365_`:
+
+```bash
+# Authentication
+export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+export M365_CLIENT_SECRET="your-secret-here"
+
+# Cloud Environment
+export M365_CLOUD="public"
+
+# API Configuration
+export M365_USE_GRAPH_BETA="true"
+export M365_TIMEOUT="60"
+
+# Proxy Configuration
+export M365_ENABLE_PROXY="true"
+export M365_PROXY_URL="http://proxy.example.com:8080"
+```
+
+Environment variables take precedence over provider block configuration.
+
+## Authentication Examples
+
+### Client Secret (Production)
+
+```hcl
+provider "microsoft365" {
+  tenant_id     = var.tenant_id
+  client_id     = var.client_id
+  client_secret = var.client_secret
+}
+```
+
+### Client Certificate
+
+```hcl
+provider "microsoft365" {
+  tenant_id                  = var.tenant_id
+  client_id                  = var.client_id
+  client_certificate_path    = "/path/to/cert.pfx"
+  client_certificate_password = var.cert_password
+}
+```
+
+### Managed Identity (Azure VM/App Service)
+
+```hcl
+provider "microsoft365" {
+  tenant_id            = var.tenant_id
+  use_managed_identity = true
+}
+```
+
+### OIDC with GitHub Actions
+
+```hcl
+provider "microsoft365" {
+  tenant_id     = var.tenant_id
+  client_id     = var.client_id
+  use_oidc      = true
+  oidc_token_file_path = "/var/run/secrets/azure/tokens/azure-identity-token"
+}
+```
+
+### Device Code (Interactive Development)
+
+```hcl
+provider "microsoft365" {
+  tenant_id        = var.tenant_id
+  client_id        = var.client_id
+  use_device_code  = true
+}
+```
+
+## Required Permissions
+
+The service principal or user authenticating to the provider requires appropriate Microsoft Graph API permissions. Required permissions vary by resource:
+
+### Common Permission Sets
+
+**Device Management (Intune):**
+- `DeviceManagementConfiguration.ReadWrite.All`
+- `DeviceManagementApps.ReadWrite.All`
+- `DeviceManagementManagedDevices.ReadWrite.All`
+
+**Identity & Access:**
+- `Directory.ReadWrite.All`
+- `Group.ReadWrite.All`
+- `User.ReadWrite.All`
+- `Policy.ReadWrite.ConditionalAccess`
+
+**Microsoft 365 Apps:**
+- `Application.ReadWrite.All`
+- `ServicePrincipalEndpoint.ReadWrite.All`
+
+Refer to individual resource documentation for specific permission requirements.
+
+## Cloud Environment Details
+
+### Microsoft Public Cloud
+
+```hcl
+provider "microsoft365" {
+  cloud = "public"
+  # Uses graph.microsoft.com
+}
+```
+
+### US Government Cloud
+
+```hcl
+provider "microsoft365" {
+  cloud = "usgovernment"
+  # Uses graph.microsoft.us (GCC High/DoD)
+}
+```
+
+### Microsoft China Cloud
+
+```hcl
+provider "microsoft365" {
+  cloud = "china"
+  # Uses microsoftgraph.chinacloudapi.cn
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Secret Management">
+    - Never hardcode secrets in provider configuration
+    - Use Terraform variables and store secrets in:
+      - Environment variables
+      - HashiCorp Vault
+      - Azure Key Vault
+      - AWS Secrets Manager
+      - Terraform Cloud/Enterprise workspace variables
+  </Accordion>
+
+  <Accordion title="Service Principal Permissions">
+    - Follow principle of least privilege
+    - Create separate service principals for different environments (dev/staging/prod)
+    - Regularly audit and rotate credentials
+    - Use certificate-based authentication in production for enhanced security
+  </Accordion>
+
+  <Accordion title="Network Configuration">
+    - Test proxy configuration before production deployment
+    - Configure appropriate timeouts for your network conditions
+    - Use retry settings to handle transient API failures
+    - Enable request logging only in development (may expose sensitive data)
+  </Accordion>
+
+  <Accordion title="Multi-Environment Setup">
+    - Use different tenant IDs for dev/staging/prod environments
+    - Leverage Terraform workspaces or separate state files
+    - Consider using `use_graph_beta` only in non-production environments
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Authentication Issues
+
+**Error: Invalid client secret**
+- Verify client secret hasn't expired
+- Check for whitespace or special characters in secret value
+- Ensure service principal has required API permissions
+
+**Error: AADSTS700016 (Application not found)**
+- Verify `client_id` and `tenant_id` are correct
+- Ensure application exists in the correct tenant
+- Check that service principal is enabled
+
+### Network Issues
+
+**Error: Connection timeout**
+- Increase `timeout` value
+- Verify network connectivity to Microsoft Graph API
+- Check proxy configuration if applicable
+
+**Error: Too many requests (429)**
+- Microsoft Graph API is throttling requests
+- Provider will automatically retry with exponential backoff
+- Consider spreading operations across multiple `terraform apply` runs
+
+### API Version Issues
+
+**Error: Resource not found in v1.0**
+- Resource may only be available in beta API
+- Set `use_graph_beta = true` in provider configuration
+- Check resource documentation for API version requirements
+
+## Related Resources
+
+- [Microsoft Graph API Permissions Reference](https://learn.microsoft.com/en-us/graph/permissions-reference)
+- [Azure AD Authentication Flows](https://learn.microsoft.com/en-us/azure/active-directory/develop/authentication-flows-app-scenarios)
+- [National Cloud Deployments](https://learn.microsoft.com/en-us/graph/deployments)

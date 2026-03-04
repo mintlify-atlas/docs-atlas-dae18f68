@@ -1,122 +1,215 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Microsoft 365 Terraform Provider",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#594ed8",
+    "light": "#acacf4",
+    "dark": "#040404"
   },
   "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo-light.svg",
+    "dark": "/logo-dark.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/deploymenttheory/terraform-provider-microsoft365"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/deploymenttheory/terraform-provider-microsoft365",
+      "discord": "https://discord.gg/Uq8zG6g7WE"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Authentication",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "authentication/overview",
+              "authentication/client-secret",
+              "authentication/client-certificate",
+              "authentication/device-code",
+              "authentication/interactive-browser",
+              "authentication/managed-identity",
+              "authentication/workload-identity",
+              "authentication/oidc",
+              "authentication/oidc-github",
+              "authentication/oidc-azure-devops",
+              "authentication/azure-cli",
+              "authentication/azure-developer-cli"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Configuration",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "configuration/provider-configuration",
+              "configuration/environment-variables",
+              "configuration/cloud-environments",
+              "configuration/client-options",
+              "configuration/proxy-settings"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Core Concepts",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "concepts/resource-management",
+              "concepts/graph-api-versions",
+              "concepts/state-management",
+              "concepts/drift-detection"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/terraform-best-practices",
+              "guides/batch-import",
+              "guides/progressive-rollout",
+              "guides/workspace-design",
+              "guides/multi-tenant",
+              "guides/disaster-recovery"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Resources",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Overview",
             "pages": [
-              "api-reference/introduction"
+              "resources/overview"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Device & App Management",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "resources/device-app-management/overview",
+              "resources/device-app-management/mobile-apps",
+              "resources/device-app-management/app-configuration",
+              "resources/device-app-management/app-assignments"
+            ]
+          },
+          {
+            "group": "Device Management",
+            "pages": [
+              "resources/device-management/overview",
+              "resources/device-management/configuration-policies",
+              "resources/device-management/compliance-policies",
+              "resources/device-management/windows-updates",
+              "resources/device-management/enrollment"
+            ]
+          },
+          {
+            "group": "Identity & Access",
+            "pages": [
+              "resources/identity-access/overview",
+              "resources/identity-access/conditional-access",
+              "resources/identity-access/authentication-strength",
+              "resources/identity-access/named-locations",
+              "resources/identity-access/custom-security-attributes"
+            ]
+          },
+          {
+            "group": "Applications",
+            "pages": [
+              "resources/applications/overview",
+              "resources/applications/app-registrations",
+              "resources/applications/service-principals",
+              "resources/applications/credentials"
+            ]
+          },
+          {
+            "group": "Groups & Users",
+            "pages": [
+              "resources/groups-users/overview",
+              "resources/groups-users/groups",
+              "resources/groups-users/users",
+              "resources/groups-users/membership"
+            ]
+          },
+          {
+            "group": "Microsoft Teams",
+            "pages": [
+              "resources/teams/overview",
+              "resources/teams/teams",
+              "resources/teams/channels",
+              "resources/teams/settings"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Data Sources",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "data-sources/overview"
+            ]
+          },
+          {
+            "group": "Device Management",
+            "pages": [
+              "data-sources/device-management"
+            ]
+          },
+          {
+            "group": "Identity & Access",
+            "pages": [
+              "data-sources/identity-access"
+            ]
+          },
+          {
+            "group": "Applications",
+            "pages": [
+              "data-sources/applications"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Provider",
+            "pages": [
+              "reference/provider-schema",
+              "reference/provider-roadmap",
+              "reference/changelog"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "reference/development-guide",
+              "reference/provider-comparison",
+              "reference/known-issues",
+              "reference/contributing"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "reference/examples"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

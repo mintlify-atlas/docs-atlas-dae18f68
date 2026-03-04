@@ -1,80 +1,390 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Deploy your first Microsoft 365 resources with Terraform in under 10 minutes
 ---
 
-## Get started in three steps
+This guide walks you through deploying your first Microsoft 365 resources using Terraform. You'll create a user account and a security group, then assign the user to that group.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- Terraform >= 1.14.x installed ([download here](https://www.terraform.io/downloads))
+- A Microsoft 365 tenant
+- An Entra ID application registration with the following **Microsoft Graph API permissions**:
+  - `User.ReadWrite.All` - Create and manage users
+  - `Group.ReadWrite.All` - Create and manage groups
+  - `GroupMember.ReadWrite.All` - Manage group memberships
+- Your tenant ID, client ID, and client secret
 
-### Step 2: Deploy your changes
+<Note>
+If you haven't created an Entra ID application yet, see the [Installation guide](/installation) for detailed instructions.
+</Note>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+## Step 1: Create your Terraform configuration
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+Create a new directory for your Terraform project and add the following files:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+### Configure the provider
 
-### Step 3: Go live
+Create a file named `main.tf`:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```hcl main.tf
+terraform {
+  required_version = ">= 1.14.0"
+  
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"
+    }
+  }
+}
+
+provider "microsoft365" {
+  cloud       = "public"
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+
+  # Optional: Disable telemetry
+  telemetry_optout = true
+}
+```
+
+### Define variables
+
+Create a file named `variables.tf`:
+
+```hcl variables.tf
+variable "tenant_id" {
+  description = "Microsoft 365 tenant ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "client_id" {
+  description = "Entra ID application client ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "client_secret" {
+  description = "Entra ID application client secret"
+  type        = string
+  sensitive   = true
+}
+```
+
+### Set your credentials
+
+Create a file named `terraform.tfvars` (this file should **never** be committed to version control):
+
+```hcl terraform.tfvars
+tenant_id     = "00000000-0000-0000-0000-000000000000"
+client_id     = "11111111-1111-1111-1111-111111111111"
+client_secret = "your-client-secret-value-here"
+```
+
+<Warning>
+Add `terraform.tfvars` to your `.gitignore` file to prevent accidentally committing credentials to version control.
+</Warning>
+
+## Step 2: Create your first resources
+
+Add the following to your `main.tf` file to create a security group and a user:
+
+```hcl main.tf
+# Create a security group
+resource "microsoft365_graph_beta_groups_group" "engineering" {
+  display_name     = "Engineering Team"
+  mail_nickname    = "engineering-team"
+  description      = "Security group for engineering team members"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+
+# Create a user
+resource "microsoft365_graph_beta_users_user" "john_doe" {
+  display_name        = "John Doe"
+  user_principal_name = "john.doe@yourdomain.com"
+  mail_nickname       = "johndoe"
+  account_enabled     = true
+  
+  password_profile = {
+    password                           = "TemporaryPassword123!"
+    force_change_password_next_sign_in = true
+  }
+}
+
+# Assign the user to the security group
+resource "microsoft365_graph_beta_groups_group_member_assignment" "john_to_engineering" {
+  group_id           = microsoft365_graph_beta_groups_group.engineering.id
+  member_id          = microsoft365_graph_beta_users_user.john_doe.id
+  member_object_type = "User"
+}
+```
+
+<Note>
+Replace `john.doe@yourdomain.com` with a valid user principal name for your tenant (e.g., `john.doe@contoso.onmicrosoft.com`).
+</Note>
+
+## Step 3: Initialize Terraform
+
+Run the following command to download the provider:
+
+```bash
+terraform init
+```
+
+You should see output indicating that the provider has been successfully installed:
+
+```
+Initializing provider plugins...
+- Finding deploymenttheory/microsoft365 versions matching "~> 0.40.0"...
+- Installing deploymenttheory/microsoft365 v0.40.x...
+- Installed deploymenttheory/microsoft365 v0.40.x
+
+Terraform has been successfully initialized!
+```
+
+## Step 4: Preview the changes
+
+Run `terraform plan` to see what resources will be created:
+
+```bash
+terraform plan
+```
+
+You'll see output showing the three resources that will be created:
+
+```
+Terraform will perform the following actions:
+
+  # microsoft365_graph_beta_groups_group.engineering will be created
+  + resource "microsoft365_graph_beta_groups_group" "engineering" {
+      + display_name     = "Engineering Team"
+      + mail_nickname    = "engineering-team"
+      + description      = "Security group for engineering team members"
+      ...
+    }
+
+  # microsoft365_graph_beta_users_user.john_doe will be created
+  + resource "microsoft365_graph_beta_users_user" "john_doe" {
+      + display_name        = "John Doe"
+      + user_principal_name = "john.doe@yourdomain.com"
+      ...
+    }
+
+  # microsoft365_graph_beta_groups_group_member_assignment.john_to_engineering will be created
+  + resource "microsoft365_graph_beta_groups_group_member_assignment" "john_to_engineering" {
+      + group_id           = (known after apply)
+      + member_id          = (known after apply)
+      + member_object_type = "User"
+    }
+
+Plan: 3 to add, 0 to change, 0 to destroy.
+```
+
+## Step 5: Apply the configuration
+
+Apply your configuration to create the resources:
+
+```bash
+terraform apply
+```
+
+Type `yes` when prompted to confirm. Terraform will create the resources and display the results:
+
+```
+microsoft365_graph_beta_groups_group.engineering: Creating...
+microsoft365_graph_beta_users_user.john_doe: Creating...
+microsoft365_graph_beta_groups_group.engineering: Creation complete after 2s
+microsoft365_graph_beta_users_user.john_doe: Creation complete after 3s
+microsoft365_graph_beta_groups_group_member_assignment.john_to_engineering: Creating...
+microsoft365_graph_beta_groups_group_member_assignment.john_to_engineering: Creation complete after 1s
+
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+```
+
+## Step 6: Verify the resources
+
+You can verify that the resources were created by:
+
+1. Logging into the [Entra ID admin center](https://entra.microsoft.com)
+2. Navigate to **Identity** > **Users** > **All users** to see the new user
+3. Navigate to **Identity** > **Groups** > **All groups** to see the new group
+4. Click on the group to verify the user is a member
+
+## Step 7: Clean up (optional)
+
+To remove the resources you created:
+
+```bash
+terraform destroy
+```
+
+Type `yes` when prompted. Terraform will delete all three resources in the correct order.
+
+<Warning>
+The `terraform destroy` command permanently deletes resources. In this quick start, we set `hard_delete = false` by default, which means the user will be soft-deleted and can be recovered within 30 days. To permanently delete users immediately, add `hard_delete = true` to the user resource.
+</Warning>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you've deployed your first resources, you can:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Explore authentication methods" icon="key">
+    Learn about the 11 authentication methods supported by the provider, including managed identity and OIDC for CI/CD pipelines
+  </Card>
+  
+  <Card title="Create conditional access policies" icon="shield">
+    Secure your tenant by managing conditional access policies as code
+  </Card>
+  
+  <Card title="Manage Intune policies" icon="mobile">
+    Configure device compliance, configuration profiles, and app protection policies
+  </Card>
+  
+  <Card title="Browse the registry" icon="book" href="https://registry.terraform.io/providers/deploymenttheory/microsoft365/latest/docs">
+    Explore all available resources and data sources
+  </Card>
 </CardGroup>
 
+## Advanced example: Conditional access policy
+
+Here's a more advanced example that creates a conditional access policy requiring MFA for all users:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "require_mfa" {
+  display_name = "Require MFA for all users"
+  state        = "enabledForReportingButNotEnforced"
+
+  conditions = {
+    client_app_types = ["all"]
+
+    users = {
+      include_users  = ["All"]
+      exclude_users  = []
+      include_groups = []
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+      include_roles = []
+      exclude_roles = []
+    }
+
+    applications = {
+      include_applications = ["All"]
+      exclude_applications = []
+    }
+  }
+
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["mfa"]
+  }
+}
+```
+
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+Start new conditional access policies in `enabledForReportingButNotEnforced` state to test them before enforcement. Change to `enabled` after validation.
 </Note>
+
+## Common patterns
+
+### Using for_each for multiple resources
+
+Create multiple users from a list:
+
+```hcl
+locals {
+  users = {
+    "john.doe" = {
+      display_name = "John Doe"
+      mail_nickname = "johndoe"
+    }
+    "jane.smith" = {
+      display_name = "Jane Smith"
+      mail_nickname = "janesmith"
+    }
+  }
+}
+
+resource "microsoft365_graph_beta_users_user" "team_members" {
+  for_each = local.users
+
+  display_name        = each.value.display_name
+  user_principal_name = "${each.key}@yourdomain.com"
+  mail_nickname       = each.value.mail_nickname
+  account_enabled     = true
+  
+  password_profile = {
+    password                           = "TemporaryPassword123!"
+    force_change_password_next_sign_in = true
+  }
+}
+```
+
+### Using data sources
+
+Reference existing resources:
+
+```hcl
+data "microsoft365_graph_beta_groups_group" "existing_group" {
+  display_name = "Existing Security Group"
+}
+
+resource "microsoft365_graph_beta_groups_group_member_assignment" "add_to_existing" {
+  group_id           = data.microsoft365_graph_beta_groups_group.existing_group.id
+  member_id          = microsoft365_graph_beta_users_user.john_doe.id
+  member_object_type = "User"
+}
+```
+
+## Troubleshooting
+
+### Authentication errors
+
+If you receive authentication errors, verify:
+
+1. Your tenant ID, client ID, and client secret are correct
+2. Your Entra ID application has the required API permissions
+3. Admin consent has been granted for the API permissions
+
+### Permission errors
+
+If operations fail with permission errors:
+
+1. Check that your application has the necessary Graph API permissions
+2. Ensure admin consent has been granted
+3. Verify the service principal has the appropriate directory roles if needed
+
+### Enable debug mode
+
+For detailed logging, enable debug mode:
+
+```hcl
+provider "microsoft365" {
+  # ... other configuration ...
+  debug_mode = true
+}
+```
+
+## Get help
+
+<CardGroup cols={2}>
+  <Card title="Join Discord" icon="discord" href="https://discord.gg/Uq8zG6g7WE">
+    Get help from the community
+  </Card>
+  
+  <Card title="Report issues" icon="github" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/issues">
+    Found a bug? Let us know
+  </Card>
+</CardGroup>

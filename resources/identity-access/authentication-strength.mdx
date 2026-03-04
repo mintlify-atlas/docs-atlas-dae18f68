@@ -1,0 +1,263 @@
+---
+title: Authentication Strength Policies
+description: Define specific authentication method requirements for conditional access
+---
+
+Authentication strength policies allow you to require specific authentication methods, providing more granular control than traditional MFA requirements.
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Authentication Strength Policy" icon="key">
+    **Resource**: `microsoft365_graph_beta_identity_and_access_authentication_strength_policy`
+  </Card>
+  
+  <Card title="Authentication Context" icon="fingerprint">
+    **Resource**: `microsoft365_graph_beta_identity_and_access_authentication_context`
+  </Card>
+</CardGroup>
+
+## Authentication Strength Policy
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_authentication_strength_policy" "phishing_resistant" {
+  display_name = "Phishing-Resistant MFA"
+  description  = "Require phishing-resistant authentication methods"
+  
+  allowed_combinations = [
+    "windowsHelloForBusiness",
+    "fido2",
+    "x509CertificateMultiFactor"
+  ]
+}
+```
+
+## Available Authentication Methods
+
+| Method | Combination String | Phishing-Resistant |
+|--------|-------------------|-------------------|
+| Windows Hello for Business | `windowsHelloForBusiness` | Yes |
+| FIDO2 Security Key | `fido2` | Yes |
+| Certificate-based (Multi-factor) | `x509CertificateMultiFactor` | Yes |
+| Microsoft Authenticator (Push) | `microsoftAuthenticatorPush` | No |
+| SMS | `sms` | No |
+| Voice | `voice` | No |
+| Software OATH | `softwareOath` | No |
+| Hardware OATH | `hardwareOath` | No |
+| Password | `password` | No |
+| Temporary Access Pass | `temporaryAccessPassOneTime` | No |
+| Federated Multi-Factor | `federatedMultiFactor` | No |
+
+## Built-in Authentication Strengths
+
+Microsoft provides built-in authentication strength policies:
+
+| ID | Name | Methods |
+|----|------|--------|
+| `00000000-0000-0000-0000-000000000002` | Multi-factor authentication | All MFA methods |
+| `00000000-0000-0000-0000-000000000003` | Passwordless MFA | Passwordless methods only |
+| `00000000-0000-0000-0000-000000000004` | Phishing-resistant MFA | FIDO2, WHfB, Certificate |
+
+## Example Policies
+
+<CodeGroup>
+```hcl Phishing-Resistant
+resource "microsoft365_graph_beta_identity_and_access_authentication_strength_policy" "phishing_resistant" {
+  display_name = "Phishing-Resistant Authentication"
+  description  = "Only allow phishing-resistant methods"
+  
+  allowed_combinations = [
+    "windowsHelloForBusiness",
+    "fido2",
+    "x509CertificateMultiFactor"
+  ]
+}
+```
+
+```hcl Passwordless
+resource "microsoft365_graph_beta_identity_and_access_authentication_strength_policy" "passwordless" {
+  display_name = "Passwordless Authentication"
+  description  = "Modern passwordless methods"
+  
+  allowed_combinations = [
+    "windowsHelloForBusiness",
+    "fido2",
+    "microsoftAuthenticatorPush",
+    "temporaryAccessPassOneTime"
+  ]
+}
+```
+
+```hcl Standard MFA
+resource "microsoft365_graph_beta_identity_and_access_authentication_strength_policy" "standard_mfa" {
+  display_name = "Standard MFA"
+  description  = "Common MFA methods"
+  
+  allowed_combinations = [
+    "password,microsoftAuthenticatorPush",
+    "password,sms",
+    "password,voice",
+    "password,softwareOath",
+    "windowsHelloForBusiness",
+    "fido2"
+  ]
+}
+```
+</CodeGroup>
+
+## Method Combinations
+
+You can require multiple methods:
+
+```hcl
+allowed_combinations = [
+  "password,hardwareOath",           # Password + Hardware OATH token
+  "password,microsoftAuthenticatorPush",  # Password + Authenticator push
+  "password,sms",                    # Password + SMS code
+  "password,softwareOath"            # Password + Software OATH token
+]
+```
+
+## FIDO2 Configuration
+
+Restrict to specific FIDO2 keys:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_authentication_strength_policy" "fido2_restricted" {
+  display_name = "FIDO2 with Approved Keys"
+  
+  allowed_combinations = [
+    "fido2"
+  ]
+  
+  combination_configurations = [
+    {
+      applies_to_combinations = "fido2"
+      allowed_aaguids = [
+        "90a3ccdf-635c-4729-a248-9b709135078f",  # YubiKey 5
+        "de1e552d-db1d-4423-a619-566b625cdc84"   # Specific FIDO2 key
+      ]
+    }
+  ]
+}
+```
+
+## Certificate-Based Authentication
+
+Configure certificate requirements:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_authentication_strength_policy" "certificate_auth" {
+  display_name = "Certificate-Based Authentication"
+  
+  allowed_combinations = [
+    "x509CertificateMultiFactor"
+  ]
+  
+  combination_configurations = [
+    {
+      applies_to_combinations = "x509CertificateMultiFactor"
+      allowed_issuer_skis     = [
+        "1A2B3C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9A0A"
+      ]
+      allowed_policy_oids     = [
+        "1.3.6.1.4.1.311.21.8.1.5"
+      ]
+    }
+  ]
+}
+```
+
+## Use in Conditional Access
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "require_strong_auth" {
+  display_name = "Require Strong Authentication"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+    }
+    applications = {
+      include_applications = ["All"]
+    }
+  }
+  
+  grant_controls = {
+    operator = "OR"
+    authentication_strength = {
+      id = microsoft365_graph_beta_identity_and_access_authentication_strength_policy.phishing_resistant.id
+    }
+  }
+}
+```
+
+## Authentication Context
+
+Define step-up authentication requirements:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_authentication_context" "sensitive_data" {
+  display_name = "Access Sensitive Data"
+  description  = "Requires phishing-resistant authentication"
+  is_available = true
+}
+
+# Use in conditional access
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "sensitive_data_policy" {
+  display_name = "Sensitive Data Access Policy"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+    }
+    applications = {
+      include_authentication_context_class_references = [
+        microsoft365_graph_beta_identity_and_access_authentication_context.sensitive_data.id
+      ]
+    }
+  }
+  
+  grant_controls = {
+    operator = "OR"
+    authentication_strength = {
+      id = "00000000-0000-0000-0000-000000000004"  # Phishing-resistant
+    }
+  }
+}
+```
+
+## Import Syntax
+
+```bash
+terraform import microsoft365_graph_beta_identity_and_access_authentication_strength_policy.policy <policy-id>
+
+terraform import microsoft365_graph_beta_identity_and_access_authentication_context.context <context-id>
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Prioritize phishing-resistant methods">
+    Use FIDO2, Windows Hello for Business, or certificate-based authentication for highest security.
+  </Accordion>
+
+  <Accordion title="Plan migration path">
+    When moving to passwordless, allow temporary access passes during transition.
+  </Accordion>
+
+  <Accordion title="Test with pilot users">
+    Deploy new authentication requirements to pilot groups before broad rollout.
+  </Accordion>
+
+  <Accordion title="Provide user guidance">
+    Document how to enroll and use required authentication methods.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Conditional Access](/resources/identity-access/conditional-access)
+- [Named Locations](/resources/identity-access/named-locations)

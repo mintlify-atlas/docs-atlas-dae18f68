@@ -1,0 +1,267 @@
+---
+title: Identity & Access Overview
+description: Secure your Microsoft 365 environment with conditional access, authentication policies, and security attributes
+icon: shield-halved
+---
+
+Identity and Access resources enable you to implement zero-trust security policies, control authentication methods, and manage access to your Microsoft 365 resources.
+
+## Resource Categories
+
+<CardGroup cols={2}>
+  <Card title="Conditional Access" icon="shield-check" href="/resources/identity-access/conditional-access">
+    Control access based on conditions
+  </Card>
+  <Card title="Authentication Strength" icon="key" href="/resources/identity-access/authentication-strength">
+    Define authentication requirements
+  </Card>
+  <Card title="Named Locations" icon="location-dot" href="/resources/identity-access/named-locations">
+    Define trusted network locations
+  </Card>
+  <Card title="Custom Security Attributes" icon="tags" href="/resources/identity-access/custom-security-attributes">
+    Extend directory with custom attributes
+  </Card>
+</CardGroup>
+
+## Zero Trust Security
+
+Implement zero-trust principles with conditional access:
+
+```hcl
+# Require MFA for all users
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "require_mfa" {
+  display_name = "Require MFA for All Users"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+    }
+    
+    applications = {
+      include_applications = ["All"]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["mfa"]
+  }
+}
+```
+
+## Common Use Cases
+
+<AccordionGroup>
+  <Accordion title="Require MFA for all users">
+    Enforce multi-factor authentication for all users accessing any application.
+  </Accordion>
+
+  <Accordion title="Block access from untrusted locations">
+    Prevent sign-ins from countries or IP ranges that aren't part of your organization.
+  </Accordion>
+
+  <Accordion title="Require compliant devices">
+    Only allow access from devices that meet your compliance requirements.
+  </Accordion>
+
+  <Accordion title="Enforce strong authentication for admins">
+    Require phishing-resistant authentication for privileged roles.
+  </Accordion>
+
+  <Accordion title="Control app access with session policies">
+    Limit actions users can take in cloud apps (e.g., block downloads on unmanaged devices).
+  </Accordion>
+</AccordionGroup>
+
+## Policy Components
+
+### Conditions
+
+Define when policies apply:
+
+- **Users**: All users, specific users, groups, or roles
+- **Applications**: All apps, Office 365, specific apps
+- **Devices**: Platforms, device state, filters
+- **Locations**: All locations, selected networks, countries
+- **Client Apps**: Browser, mobile apps, legacy clients
+- **Risk**: Sign-in risk, user risk levels
+
+### Access Controls
+
+Define what happens when conditions are met:
+
+- **Grant**: Allow, block, or require controls (MFA, compliant device, etc.)
+- **Session**: Control app behavior (sign-in frequency, app restrictions)
+
+## Policy Example
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "block_legacy_auth" {
+  display_name = "Block Legacy Authentication"
+  state        = "enabled"
+  
+  conditions = {
+    client_app_types = [
+      "exchangeActiveSync",
+      "other"  # Legacy authentication protocols
+    ]
+    
+    users = {
+      include_users = ["All"]
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+    }
+    
+    applications = {
+      include_applications = ["All"]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["block"]
+  }
+}
+```
+
+## Authentication Context
+
+Define granular authentication requirements:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_authentication_context" "high_security" {
+  display_name = "High Security Operations"
+  description  = "Require phishing-resistant MFA"
+  
+  is_available = true
+}
+
+# Use in conditional access policy
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "high_security_policy" {
+  display_name = "High Security Policy"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+    }
+    
+    applications = {
+      include_authentication_context_class_references = [
+        microsoft365_graph_beta_identity_and_access_authentication_context.high_security.id
+      ]
+    }
+  }
+  
+  grant_controls = {
+    operator = "OR"
+    authentication_strength = {
+      id = "00000000-0000-0000-0000-000000000004"  # Phishing-resistant MFA
+    }
+  }
+}
+```
+
+## Report-Only Mode
+
+Test policies before enforcement:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "test_policy" {
+  display_name = "Test Policy - Report Only"
+  state        = "enabledForReportingButNotEnforced"
+  
+  conditions = {
+    # ... conditions
+  }
+  
+  grant_controls = {
+    # ... controls
+  }
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Start with report-only mode">
+    Deploy new policies in report-only mode to understand impact before enforcement.
+  </Step>
+  
+  <Step title="Always exclude break-glass accounts">
+    Ensure emergency access accounts are excluded from all policies to prevent lockout.
+  </Step>
+  
+  <Step title="Use named locations for trusted networks">
+    Define corporate networks as named locations for more precise policies.
+  </Step>
+  
+  <Step title="Implement layered security">
+    Combine multiple policies for defense in depth (MFA + compliant device + trusted location).
+  </Step>
+  
+  <Step title="Monitor sign-in logs">
+    Regularly review sign-in logs and conditional access reports to identify issues.
+  </Step>
+</Steps>
+
+## Emergency Access
+
+Always create break-glass accounts:
+
+```hcl
+# Break-glass account group
+resource "microsoft365_graph_beta_groups_group" "breakglass" {
+  display_name     = "Break Glass Accounts"
+  description      = "Emergency access accounts - excluded from all CA policies"
+  security_enabled = true
+}
+
+# Exclude from all policies
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "example" {
+  display_name = "Example Policy"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+    }
+  }
+}
+```
+
+## Network Filtering
+
+Control access based on network requirements:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_network_filtering_policy" "branch_offices" {
+  name = "Branch Office Network Policy"
+  
+  # Configuration
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Conditional Access" icon="shield-check" href="/resources/identity-access/conditional-access">
+    Create conditional access policies
+  </Card>
+  <Card title="Authentication Strength" icon="key" href="/resources/identity-access/authentication-strength">
+    Define authentication requirements
+  </Card>
+  <Card title="Named Locations" icon="location-dot" href="/resources/identity-access/named-locations">
+    Configure trusted locations
+  </Card>
+  <Card title="Security Attributes" icon="tags" href="/resources/identity-access/custom-security-attributes">
+    Extend directory schema
+  </Card>
+</CardGroup>

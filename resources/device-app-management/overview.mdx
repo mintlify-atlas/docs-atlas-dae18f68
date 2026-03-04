@@ -1,0 +1,117 @@
+---
+title: Device & App Management Overview
+description: Resources for managing mobile applications and app configurations in Microsoft Intune
+icon: mobile
+---
+
+Device and App Management resources enable you to manage mobile applications, app configurations, and app assignments across iOS, Android, macOS, and Windows platforms.
+
+## Resource Categories
+
+<CardGroup cols={3}>
+  <Card title="Mobile Apps" icon="mobile-screen" href="/resources/device-app-management/mobile-apps">
+    Win32, iOS, macOS, Android apps
+  </Card>
+  <Card title="App Configuration" icon="sliders" href="/resources/device-app-management/app-configuration">
+    Managed app configuration policies
+  </Card>
+  <Card title="App Assignments" icon="arrow-right-to-bracket" href="/resources/device-app-management/app-assignments">
+    App deployment and targeting
+  </Card>
+</CardGroup>
+
+## Common Use Cases
+
+### Application Deployment
+
+```hcl
+# Deploy Win32 app to all devices
+resource "microsoft365_graph_beta_device_and_app_management_win32_app" "firefox" {
+  display_name = "Mozilla Firefox"
+  publisher    = "Mozilla"
+  
+  app_installer = {
+    installer_file_path_source = "/path/to/Firefox.intunewin"
+  }
+  
+  install_command_line   = "msiexec /i \"Firefox Setup.msi\" /qn"
+  uninstall_command_line = "msiexec /x {GUID} /qn"
+}
+
+# Assign to all devices
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "firefox_all_devices" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.firefox.id
+  intent        = "required"
+  
+  target = {
+    target_type = "allDevices"
+  }
+}
+```
+
+### Mobile App Configuration
+
+```hcl
+# iOS managed app configuration
+resource "microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy" "outlook" {
+  display_name = "Outlook Configuration"
+  
+  # Configuration settings
+}
+```
+
+## Platform Support
+
+| Platform | App Types | Configuration | Assignment |
+|----------|-----------|---------------|------------|
+| Windows | Win32, WinGet, Web, Office Suite | ✓ | ✓ |
+| macOS | PKG, DMG, LOB, VPP | ✓ | ✓ |
+| iOS/iPadOS | Store, Web Clip, LOB | ✓ | ✓ |
+| Android | Managed, LOB | ✓ | ✓ |
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion title="App Lifecycle Management">
+    - Upload and package apps
+    - Configure detection rules
+    - Define install/uninstall commands
+    - Set requirements and dependencies
+    - Manage app supersedence
+  </Accordion>
+
+  <Accordion title="Assignment Targeting">
+    - Target all devices or all licensed users
+    - Assign to specific groups
+    - Use assignment filters for granular control
+    - Set install intents (required, available, uninstall)
+    - Configure exclusion groups
+  </Accordion>
+
+  <Accordion title="App Configuration Policies">
+    - Platform-specific configurations
+    - Managed app settings
+    - Custom XML/JSON configurations
+    - App protection policies integration
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Device Management](/resources/device-management/overview) - Device configuration and compliance
+- [Groups & Users](/resources/groups-users/overview) - Assignment targets
+- [Applications](/resources/applications/overview) - Enterprise app registrations
+
+## Next Steps
+
+<Steps>
+  <Step title="Explore Mobile Apps">
+    Learn about [mobile app resources](/resources/device-app-management/mobile-apps) for different platforms
+  </Step>
+  <Step title="Configure Apps">
+    Set up [app configuration policies](/resources/device-app-management/app-configuration)
+  </Step>
+  <Step title="Deploy Apps">
+    Create [app assignments](/resources/device-app-management/app-assignments) to target users and devices
+  </Step>
+</Steps>

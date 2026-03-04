@@ -1,0 +1,299 @@
+---
+title: Terraform best practices
+description: Best practices for operating the Microsoft 365 Terraform provider at scale, including performance, concurrency, and reliability considerations
+---
+
+This guide covers operational best practices when using the Microsoft 365 Terraform provider, focusing on parallelism, API throttling, and handling large workloads efficiently.
+
+<Warning>
+Following these recommendations will help you avoid common operational issues when managing Microsoft 365 resources at scale, particularly for large deployments or when working with file-based resources.
+</Warning>
+
+## Understanding parallelism in Terraform
+
+By default, Terraform runs up to 10 operations concurrently. While this parallelism improves performance in many scenarios, it can cause issues with the Microsoft 365 provider due to:
+
+1. Microsoft Graph API throttling limits
+2. Header map collision issues in the Kiota SDK HTTP client
+3. Resource contention when uploading and processing large files
+
+## Recommended Terraform settings
+
+### Setting appropriate parallelism
+
+For Microsoft 365 provider operations, we strongly recommend reducing Terraform's default parallelism to 1 to prevent API throttling and client-side errors:
+
+```bash
+# Run terraform with reduced parallelism
+terraform apply -parallelism=1
+```
+
+### When to limit parallelism
+
+**Always use `-parallelism=1` for both `terraform plan` and `terraform apply` operations.**
+
+Microsoft Graph imposes [varying throttling limits](https://learn.microsoft.com/en-us/graph/throttling-limits) across different services and operation types. During a typical Terraform workflow:
+
+<Steps>
+  <Step title="Planning phase">
+    Terraform performs multiple GET requests to read current resource state, consuming API quota
+  </Step>
+  
+  <Step title="Apply phase">
+    Terraform executes CREATE (POST), UPDATE (PATCH/PUT), and DELETE operations, each with their own throttling limits
+  </Step>
+  
+  <Step title="Refresh operations">
+    Concurrent read operations can trigger service-specific throttling before write operations even begin
+  </Step>
+</Steps>
+
+Since all operation types (GET, POST, PATCH, PUT, DELETE) count toward service-specific throttling limits, and these limits vary significantly across Microsoft Graph services (e.g., 150 requests/minute for security alerts vs. 10,000 requests/10 minutes for Outlook), running operations concurrently can quickly exhaust API quotas and trigger 429 (Too Many Requests) errors.
+
+By limiting parallelism to 1, you ensure operations execute sequentially, staying well within all throttling limits and avoiding both client-side errors and server-side API throttling.
+
+## Environment variable configuration
+
+You can set environment variables to enforce parallelism limits for all Terraform operations:
+
+```bash
+# Enforce sequential operations for both plan and apply
+export TF_CLI_ARGS_apply="-parallelism=1"
+export TF_CLI_ARGS_plan="-parallelism=1"
+
+# Optional: Configure retry behavior for transient errors
+export M365_MAX_RETRY_ATTEMPTS=15
+export M365_RETRY_MAX_DELAY_MS=60000
+export M365_RETRY_MIN_DELAY_MS=1000
+```
+
+Setting these environment variables ensures that all Terraform commands respect Microsoft Graph API throttling limits without requiring explicit flags on each command.
+
+## Continuous integration considerations
+
+For CI/CD pipelines, add explicit parallelism settings:
+
+```yaml GitHub Actions
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: hashicorp/setup-terraform@v3.1.2
+      
+      - name: Terraform Init
+        run: terraform init
+      
+      - name: Terraform Plan
+        run: terraform plan -parallelism=1
+        env:
+          # Authentication variables...
+      
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -parallelism=1
+        env:
+          # Authentication variables...
+```
+
+## State management best practices
+
+### Use remote state storage
+
+**Always use remote state backends for production environments.** HashiCorp strongly recommends storing Terraform state remotely to enable collaboration, state locking, and secure access control.
+
+<CodeGroup>
+```hcl Azure Storage
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "terraform-state-rg"
+    storage_account_name = "tfstateaccount"
+    container_name       = "tfstate"
+    key                  = "m365.terraform.tfstate"
+  }
+}
+```
+
+```hcl Terraform Cloud
+terraform {
+  cloud {
+    organization = "my-org"
+    
+    workspaces {
+      name = "m365-production"
+    }
+  }
+}
+```
+
+```hcl S3
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-state"
+    key            = "m365/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-state-lock"
+  }
+}
+```
+</CodeGroup>
+
+Remote state provides:
+
+- **State locking**: Prevents concurrent modifications that could corrupt state
+- **Encryption at rest**: Protects sensitive data in state files
+- **Team collaboration**: Enables multiple team members to work on the same infrastructure
+- **Audit trail**: Tracks who made changes and when
+
+### Enable refresh-only mode for drift detection
+
+Use `terraform plan -refresh-only` to detect configuration drift without proposing changes. This is particularly useful for monitoring Microsoft 365 resources that may be modified outside Terraform:
+
+```bash
+# Check for drift without planning changes
+terraform plan -refresh-only -parallelism=1
+
+# Update state to match real-world resources
+terraform apply -refresh-only -auto-approve -parallelism=1
+```
+
+## Credential security
+
+### Never hardcode credentials
+
+**Never store credentials in Terraform configuration files or version control.** Use one of these secure methods:
+
+<AccordionGroup>
+  <Accordion title="Environment variables (recommended for local development)">
+    ```bash
+    export M365_CLIENT_ID="your-client-id"
+    export M365_CLIENT_SECRET="your-client-secret"
+    export M365_TENANT_ID="your-tenant-id"
+    ```
+  </Accordion>
+  
+  <Accordion title="Terraform Cloud/Enterprise Variables">
+    Store sensitive values as sensitive variables in Terraform Cloud workspace settings. These are encrypted at rest and only decrypted during runs.
+  </Accordion>
+  
+  <Accordion title="Azure Key Vault">
+    ```hcl
+    data "azurerm_key_vault_secret" "client_secret" {
+      name         = "m365-client-secret"
+      key_vault_id = data.azurerm_key_vault.terraform.id
+    }
+    
+    provider "microsoft365" {
+      tenant_id   = var.tenant_id
+      auth_method = "client_secret"
+      
+      entra_id_options = {
+        client_id     = var.client_id
+        client_secret = data.azurerm_key_vault_secret.client_secret.value
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Managed identities (Azure environments)">
+    ```hcl
+    provider "microsoft365" {
+      cloud       = "public"
+      tenant_id   = var.tenant_id
+      auth_method = "azure_cli"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Apply least privilege principle
+
+Grant only the minimum required Microsoft Graph API permissions to your service principal. Review and audit permissions regularly:
+
+- Start with read-only permissions during initial development
+- Add write permissions only for resources you need to manage
+- Use application permissions (not delegated) for unattended operations
+- Document required permissions in your project README
+
+## Monitoring and logging
+
+### Enable debug logging for troubleshooting
+
+When investigating issues with Microsoft Graph API calls, enable debug logging to capture detailed request/response information:
+
+```bash
+# Enable Terraform debug logging
+export TF_LOG=DEBUG
+export TF_LOG_PATH="./terraform.log"
+
+# Enable provider-specific logging
+export M365_DEBUG=true
+
+terraform apply -parallelism=1
+```
+
+<Warning>
+Debug logs contain sensitive information including access tokens. Never commit log files to version control or share them publicly.
+</Warning>
+
+### Monitor API rate limit headers
+
+The provider automatically handles retry logic, but you can monitor rate limit consumption by reviewing the `Retry-After` headers in debug logs. This helps identify resources that consume significant API quota.
+
+## Advanced configurations for large environments
+
+For very large Microsoft 365 tenants (1000+ resources), consider these additional strategies:
+
+<Steps>
+  <Step title="Use multiple workspaces">
+    Split resources across multiple Terraform workspaces by service area (e.g., Intune policies, Conditional Access, users)
+  </Step>
+  
+  <Step title="Implement resource tagging">
+    Use consistent naming and tagging conventions for easier management
+  </Step>
+  
+  <Step title="Use multiple client IDs">
+    Distribute operations across multiple registered applications with separate throttling quotas
+  </Step>
+  
+  <Step title="Schedule deployments during off-peak hours">
+    Reduce contention with other automated systems
+  </Step>
+  
+  <Step title="Implement phased rollouts">
+    Deploy changes in stages to minimize impact and facilitate rollback if needed
+  </Step>
+</Steps>
+
+## Summary
+
+**Always use `-parallelism=1` when working with the Microsoft 365 Terraform provider.** Microsoft Graph's [variable throttling limits](https://learn.microsoft.com/en-us/graph/throttling-limits) across services mean that concurrent operations—whether during `terraform plan` (GET operations) or `terraform apply` (POST/PATCH/DELETE operations)—can quickly exhaust API quotas and trigger 429 errors.
+
+Setting `-parallelism=1` helps avoid:
+
+- Server-side API throttling across all Microsoft Graph services
+- Client-side header collision issues in the Kiota SDK
+- Resource contention during file uploads and processing
+
+While this approach increases total deployment time for large configurations, it substantially improves reliability, reduces troubleshooting efforts, and ensures consistent operation regardless of which Microsoft Graph services your configuration uses.
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Microsoft Graph throttling limits" icon="gauge" href="https://learn.microsoft.com/en-us/graph/throttling-limits">
+    Official documentation on service-specific API rate limits
+  </Card>
+  
+  <Card title="Microsoft Graph best practices" icon="lightbulb" href="https://learn.microsoft.com/en-us/graph/best-practices-concept">
+    Microsoft's recommended patterns for Graph API usage
+  </Card>
+  
+  <Card title="Terraform state management" icon="database" href="https://developer.hashicorp.com/terraform/language/state">
+    HashiCorp documentation on state files and remote backends
+  </Card>
+  
+  <Card title="Terraform security" icon="lock" href="https://developer.hashicorp.com/terraform/cloud-docs/recommended-practices/part2">
+    HashiCorp's guide to secure Terraform usage
+  </Card>
+</CardGroup>

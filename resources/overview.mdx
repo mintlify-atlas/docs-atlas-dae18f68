@@ -1,0 +1,106 @@
+---
+title: Resources Overview
+description: Complete reference for all Microsoft 365 Terraform Provider resources
+---
+
+The Microsoft 365 Terraform Provider offers comprehensive resource coverage across Microsoft 365 services. Resources are organized into logical categories for easy discovery.
+
+## Resource Categories
+
+<CardGroup cols={2}>
+  <Card title="Device & App Management" icon="mobile" href="/resources/device-app-management/overview">
+    Mobile apps, app configuration, and assignments
+  </Card>
+  <Card title="Device Management" icon="laptop" href="/resources/device-management/overview">
+    Configuration policies, compliance, Windows Updates, and enrollment
+  </Card>
+  <Card title="Identity & Access" icon="shield-halved" href="/resources/identity-access/overview">
+    Conditional access, authentication strength, named locations, and security attributes
+  </Card>
+  <Card title="Applications" icon="grid-2" href="/resources/applications/overview">
+    App registrations, service principals, and credentials
+  </Card>
+  <Card title="Groups & Users" icon="users" href="/resources/groups-users/overview">
+    Group management, user accounts, and membership
+  </Card>
+  <Card title="Microsoft Teams" icon="comments" href="/resources/teams/overview">
+    Teams, channels, and settings
+  </Card>
+</CardGroup>
+
+## Quick Reference
+
+### Import Syntax
+
+All resources support importing existing Microsoft 365 objects:
+
+```bash
+terraform import <resource_type>.<name> <id>
+```
+
+For resources with composite IDs, refer to the specific resource documentation.
+
+### Common Patterns
+
+#### Graph API Versions
+
+Resources are available in two API versions:
+- **Beta**: `microsoft365_graph_beta_*` - Latest features, may change
+- **v1.0**: `microsoft365_graph_*` - Stable, production-ready
+
+#### Resource Naming Convention
+
+```
+microsoft365_graph_{version}_{service}_{resource_type}
+```
+
+Examples:
+- `microsoft365_graph_beta_device_and_app_management_win32_app`
+- `microsoft365_graph_beta_identity_and_access_conditional_access_policy`
+- `microsoft365_graph_beta_groups_group`
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use stable API versions for production">
+    Prefer `microsoft365_graph_*` (v1.0) resources in production environments. Use `microsoft365_graph_beta_*` only when you need features not yet available in stable API.
+  </Accordion>
+
+  <Accordion title="Implement proper dependency management">
+    Use `depends_on` to ensure resources are created in the correct order, especially for assignments and nested configurations.
+  </Accordion>
+
+  <Accordion title="Store sensitive data securely">
+    Use Terraform variables and secure backends for passwords, secrets, and credentials. Never commit sensitive values to version control.
+  </Accordion>
+
+  <Accordion title="Test in non-production first">
+    Always test configuration changes in a development tenant before applying to production, especially for conditional access policies.
+  </Accordion>
+</AccordionGroup>
+
+## Resource State Management
+
+Many Microsoft 365 resources support state management:
+
+- **Conditional Access Policies**: `enabled`, `disabled`, `enabledForReportingButNotEnforced`
+- **Device Configurations**: Active vs. retired states
+- **App Assignments**: Required, available, or uninstall intents
+
+<Warning>
+  Some resources create irreversible changes when deleted. Review the specific resource documentation for deletion behavior.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Device & App Management" icon="mobile" href="/resources/device-app-management/overview">
+    Explore mobile app resources
+  </Card>
+  <Card title="Device Management" icon="laptop" href="/resources/device-management/overview">
+    Configure device policies
+  </Card>
+  <Card title="Identity & Access" icon="shield-halved" href="/resources/identity-access/overview">
+    Secure access with policies
+  </Card>
+</CardGroup>

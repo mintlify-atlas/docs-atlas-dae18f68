@@ -1,0 +1,497 @@
+---
+title: Identity & Access Data Sources
+description: Query tenant information, licenses, roles, groups, and conditional access resources
+icon: id-card
+---
+
+# Identity & Access Data Sources
+
+Identity and access data sources allow you to query tenant information, license subscriptions, role definitions, groups, and conditional access templates.
+
+## Tenant Information
+
+### microsoft365_graph_beta_identity_and_access_tenant_information
+
+Retrieve information about your Microsoft 365 tenant.
+
+**Query Methods:**
+- `tenant_id` - Query by tenant ID (GUID)
+- `domain_name` - Query by domain name
+
+**Example:**
+
+```hcl
+# Get tenant info by tenant ID
+data "microsoft365_graph_beta_identity_and_access_tenant_information" "current" {
+  filter_type  = "tenant_id"
+  filter_value = "6babcaad-604b-40ac-a9d7-9fd97c0b779f"
+}
+
+# Get tenant info by domain
+data "microsoft365_graph_beta_identity_and_access_tenant_information" "by_domain" {
+  filter_type  = "domain_name"
+  filter_value = "contoso.com"
+}
+
+output "tenant_details" {
+  value = {
+    tenant_id             = data.microsoft365_graph_beta_identity_and_access_tenant_information.current.tenant_id
+    display_name          = data.microsoft365_graph_beta_identity_and_access_tenant_information.current.display_name
+    default_domain_name   = data.microsoft365_graph_beta_identity_and_access_tenant_information.current.default_domain_name
+    federation_brand_name = data.microsoft365_graph_beta_identity_and_access_tenant_information.current.federation_brand_name
+  }
+}
+```
+
+**Attributes:**
+- `tenant_id` - Unique tenant identifier
+- `display_name` - Tenant display name
+- `default_domain_name` - Primary domain (e.g., contoso.onmicrosoft.com)
+- `federation_brand_name` - Federation brand name
+- `verified_domains` - List of verified domains
+
+## License Management
+
+### microsoft365_graph_beta_identity_and_access_subscribed_skus
+
+Query subscribed license SKUs and their availability.
+
+**Query Methods:**
+- No filter (retrieves all SKUs)
+- `sku_part_number` - Filter by SKU part number (partial match)
+- `applies_to` - Filter by applies to (User, Company)
+- `sku_id` - Filter by specific SKU ID
+
+**Example:**
+
+```hcl
+# Get all subscribed SKUs
+data "microsoft365_graph_beta_identity_and_access_subscribed_skus" "all" {
+}
+
+# Get specific SKU by part number
+data "microsoft365_graph_beta_identity_and_access_subscribed_skus" "e3" {
+  sku_part_number = "ENTERPRISEPREMIUM"
+}
+
+# Get user-assignable SKUs only
+data "microsoft365_graph_beta_identity_and_access_subscribed_skus" "user_skus" {
+  applies_to = "User"
+}
+
+# Get specific SKU by ID
+data "microsoft365_graph_beta_identity_and_access_subscribed_skus" "specific" {
+  sku_id = "c7df2760-2c81-4ef7-b578-5b5392b571df"
+}
+```
+
+**Attributes:**
+- `sku_id` - SKU identifier
+- `sku_part_number` - SKU part number (e.g., "ENTERPRISEPREMIUM")
+- `consumed_units` - Number of licenses assigned
+- `prepaid_units.enabled` - Total available licenses
+- `prepaid_units.suspended` - Suspended licenses
+- `prepaid_units.warning` - Licenses in warning state
+- `capability_status` - SKU status (Enabled, Deleted, Suspended)
+- `applies_to` - What the SKU applies to (User, Company)
+- `service_plans` - List of included service plans
+
+**License Usage Report:**
+
+```hcl
+data "microsoft365_graph_beta_identity_and_access_subscribed_skus" "all" {
+}
+
+output "license_report" {
+  value = {
+    for sku in data.microsoft365_graph_beta_identity_and_access_subscribed_skus.all.subscribed_skus :
+    sku.sku_part_number => {
+      total_licenses     = sku.prepaid_units.enabled
+      consumed_licenses  = sku.consumed_units
+      available_licenses = sku.prepaid_units.enabled - sku.consumed_units
+      utilization_pct    = floor((sku.consumed_units / sku.prepaid_units.enabled) * 100)
+      status             = sku.capability_status
+      service_plan_count = length(sku.service_plans)
+    }
+  }
+}
+
+# Alert on low license availability
+output "low_license_alert" {
+  value = [
+    for sku in data.microsoft365_graph_beta_identity_and_access_subscribed_skus.all.subscribed_skus :
+    {
+      sku_name           = sku.sku_part_number
+      available          = sku.prepaid_units.enabled - sku.consumed_units
+      utilization_pct    = floor((sku.consumed_units / sku.prepaid_units.enabled) * 100)
+    }
+    if (sku.prepaid_units.enabled - sku.consumed_units) < 10
+  ]
+  description = "SKUs with less than 10 available licenses"
+}
+```
+
+### microsoft365_utility_licensing_service_plan_reference
+
+Look up detailed service plan information for license SKUs.
+
+**Example:**
+
+```hcl
+# Look up Microsoft 365 E3 details
+data "microsoft365_utility_licensing_service_plan_reference" "m365_e3" {
+  product_name = "Microsoft 365 E3"
+}
+
+output "m365_e3_details" {
+  value = {
+    product_name       = data.microsoft365_utility_licensing_service_plan_reference.m365_e3.matching_products[0].product_name
+    string_id          = data.microsoft365_utility_licensing_service_plan_reference.m365_e3.matching_products[0].string_id
+    guid               = data.microsoft365_utility_licensing_service_plan_reference.m365_e3.matching_products[0].guid
+    service_plans      = data.microsoft365_utility_licensing_service_plan_reference.m365_e3.matching_products[0].service_plans_included
+  }
+}
+```
+
+**Attributes:**
+- `matching_products` - List of matching products
+  - `product_name` - Product display name
+  - `string_id` - String identifier
+  - `guid` - Product GUID
+  - `service_plans_included` - Included service plans
+
+## Groups
+
+### microsoft365_graph_beta_groups_group
+
+Query Entra ID (Azure AD) groups.
+
+**Query Methods:**
+- `object_id` - Query by object ID (most efficient)
+- `display_name` - Query by display name
+- `mail_nickname` - Query by mail nickname
+- `odata_query` - Advanced OData filter
+
+**Example:**
+
+```hcl
+# Look up group by object ID
+data "microsoft365_graph_beta_groups_group" "it_admins" {
+  object_id = "12345678-1234-1234-1234-123456789012"
+}
+
+# Look up by display name
+data "microsoft365_graph_beta_groups_group" "marketing" {
+  display_name = "Marketing Team"
+}
+
+# Look up by mail nickname
+data "microsoft365_graph_beta_groups_group" "by_mail" {
+  mail_nickname = "marketing-team"
+}
+
+# Advanced OData query
+data "microsoft365_graph_beta_groups_group" "security_groups" {
+  odata_query = "securityEnabled eq true and mailEnabled eq false"
+}
+```
+
+**Key Attributes:**
+- `id` / `object_id` - Group identifier
+- `display_name` - Group display name
+- `description` - Group description
+- `mail_nickname` - Mail alias
+- `mail` - Email address
+- `mail_enabled` - Whether group is mail-enabled
+- `security_enabled` - Whether group is a security group
+- `group_types` - List of group types (e.g., ["Unified"], ["DynamicMembership"])
+- `visibility` - Group visibility (Public, Private, HiddenMembership)
+- `assignable_to_role` - Whether assignable to Azure AD role
+- `membership_rule` - Dynamic membership rule
+- `membership_rule_processing_state` - Dynamic membership state (On, Paused)
+- `members` - List of member object IDs
+- `owners` - List of owner object IDs
+- `assigned_licenses` - Licenses assigned to group
+- `proxy_addresses` - Email proxy addresses
+- `created_date_time` - Creation timestamp
+- `onpremises_sync_enabled` - Whether synced from on-premises
+- `onpremises_sam_account_name` - On-premises SAM account name
+- `onpremises_security_identifier` - On-premises SID
+
+**Usage in Resource Assignment:**
+
+```hcl
+# Look up groups
+data "microsoft365_graph_beta_groups_group" "pilot_users" {
+  display_name = "Pilot Users"
+}
+
+data "microsoft365_graph_beta_groups_group" "production_users" {
+  display_name = "Production Users"
+}
+
+# Use in policy assignment
+resource "microsoft365_graph_beta_device_management_configuration_policy" "security_baseline" {
+  name = "Security Baseline"
+  
+  assignments = [
+    {
+      target = {
+        group_id = data.microsoft365_graph_beta_groups_group.pilot_users.id
+      }
+    },
+    {
+      target = {
+        group_id = data.microsoft365_graph_beta_groups_group.production_users.id
+      }
+    }
+  ]
+}
+```
+
+## Role Definitions
+
+### microsoft365_graph_beta_identity_and_access_role_definitions
+
+Query Azure AD role definitions.
+
+**Example:**
+
+```hcl
+data "microsoft365_graph_beta_identity_and_access_role_definitions" "all" {
+}
+
+output "available_roles" {
+  value = [
+    for role in data.microsoft365_graph_beta_identity_and_access_role_definitions.all.role_definitions : {
+      id          = role.id
+      name        = role.display_name
+      description = role.description
+      is_builtin  = role.is_builtin
+    }
+  ]
+}
+```
+
+**Attributes:**
+- `id` - Role definition ID
+- `display_name` - Role name
+- `description` - Role description
+- `is_builtin` - Whether it's a built-in role
+- `is_enabled` - Whether role is enabled
+- `resource_scopes` - Resource scopes
+- `role_permissions` - List of permissions
+
+## Conditional Access
+
+### microsoft365_graph_beta_identity_and_access_conditional_access_template
+
+Query conditional access policy templates.
+
+**Example:**
+
+```hcl
+data "microsoft365_graph_beta_identity_and_access_conditional_access_template" "all" {
+}
+
+output "ca_templates" {
+  value = [
+    for template in data.microsoft365_graph_beta_identity_and_access_conditional_access_template.all.templates : {
+      id          = template.id
+      name        = template.name
+      description = template.description
+      scenarios   = template.scenarios
+    }
+  ]
+}
+```
+
+**Use Case - Deploy Template-Based Policy:**
+
+```hcl
+data "microsoft365_graph_beta_identity_and_access_conditional_access_template" "mfa_for_admins" {
+  # Filter for MFA template
+}
+
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "mfa" {
+  display_name = "Require MFA for Administrators"
+  # Use template settings...
+}
+```
+
+## Directory Settings
+
+### microsoft365_graph_beta_identity_and_access_directory_setting_templates
+
+Query directory setting templates.
+
+**Example:**
+
+```hcl
+data "microsoft365_graph_beta_identity_and_access_directory_setting_templates" "all" {
+}
+
+output "setting_templates" {
+  value = data.microsoft365_graph_beta_identity_and_access_directory_setting_templates.all.templates
+}
+```
+
+## Common Use Cases
+
+### License Compliance Check
+
+```hcl
+data "microsoft365_graph_beta_identity_and_access_subscribed_skus" "all" {
+}
+
+locals {
+  # Find SKUs with over 90% utilization
+  high_utilization_skus = [
+    for sku in data.microsoft365_graph_beta_identity_and_access_subscribed_skus.all.subscribed_skus :
+    sku if (sku.consumed_units / sku.prepaid_units.enabled) > 0.9
+  ]
+  
+  # Find SKUs with fewer than 5 available licenses
+  low_availability_skus = [
+    for sku in data.microsoft365_graph_beta_identity_and_access_subscribed_skus.all.subscribed_skus :
+    sku if (sku.prepaid_units.enabled - sku.consumed_units) < 5
+  ]
+}
+
+output "license_alerts" {
+  value = {
+    high_utilization = [
+      for sku in local.high_utilization_skus : {
+        name        = sku.sku_part_number
+        total       = sku.prepaid_units.enabled
+        consumed    = sku.consumed_units
+        utilization = "${floor((sku.consumed_units / sku.prepaid_units.enabled) * 100)}%"
+      }
+    ]
+    low_availability = [
+      for sku in local.low_availability_skus : {
+        name      = sku.sku_part_number
+        available = sku.prepaid_units.enabled - sku.consumed_units
+      }
+    ]
+  }
+}
+```
+
+### Multi-Stage Deployment with Groups
+
+```hcl
+# Define deployment groups
+data "microsoft365_graph_beta_groups_group" "pilot" {
+  display_name = "Pilot Users"
+}
+
+data "microsoft365_graph_beta_groups_group" "ring_1" {
+  display_name = "Ring 1 - Early Adopters"
+}
+
+data "microsoft365_graph_beta_groups_group" "ring_2" {
+  display_name = "Ring 2 - General Users"
+}
+
+data "microsoft365_graph_beta_groups_group" "ring_3" {
+  display_name = "Ring 3 - All Users"
+}
+
+# Use with deployment scheduler
+data "microsoft365_utility_deployment_scheduler" "pilot_release" {
+  name                  = "pilot-immediate"
+  deployment_start_time = "2026-03-01T08:00:00Z"
+  scope_id              = data.microsoft365_graph_beta_groups_group.pilot.id
+}
+
+data "microsoft365_utility_deployment_scheduler" "ring1_release" {
+  name                  = "ring1-week1"
+  deployment_start_time = "2026-03-01T08:00:00Z"
+  scope_id              = data.microsoft365_graph_beta_groups_group.ring_1.id
+  
+  time_condition = {
+    delay_start_time_by = 168 # 1 week delay
+  }
+}
+```
+
+### Validate Group Membership
+
+```hcl
+data "microsoft365_graph_beta_groups_group" "admins" {
+  display_name = "Global Administrators"
+}
+
+output "admin_group_info" {
+  value = {
+    id           = data.microsoft365_graph_beta_groups_group.admins.id
+    member_count = length(data.microsoft365_graph_beta_groups_group.admins.members)
+    owner_count  = length(data.microsoft365_graph_beta_groups_group.admins.owners)
+    group_type   = data.microsoft365_graph_beta_groups_group.admins.group_types
+    is_dynamic   = data.microsoft365_graph_beta_groups_group.admins.dynamic_membership_enabled
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Object IDs for Performance">
+    When you know the object ID, use it instead of name-based lookups:
+    
+    ```hcl
+    # Faster
+    data "microsoft365_graph_beta_groups_group" "team" {
+      object_id = "12345678-1234-1234-1234-123456789012"
+    }
+    
+    # Slower
+    data "microsoft365_graph_beta_groups_group" "team" {
+      display_name = "Engineering Team"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Monitor License Usage Proactively">
+    Set up alerts for license availability:
+    
+    ```hcl
+    output "license_warnings" {
+      value = [
+        for sku in data.microsoft365_graph_beta_identity_and_access_subscribed_skus.all.subscribed_skus :
+        "WARNING: ${sku.sku_part_number} has only ${sku.prepaid_units.enabled - sku.consumed_units} licenses remaining"
+        if (sku.prepaid_units.enabled - sku.consumed_units) < 10
+      ]
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Document Group Dependencies">
+    Clearly document which groups your configuration depends on:
+    
+    ```hcl
+    # Required Groups:
+    # - "Pilot Users" - Initial deployment target
+    # - "Production Users" - Full deployment target
+    # - "IT Administrators" - Policy exclusions
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Device Management Data Sources" icon="laptop" href="/data-sources/device-management">
+    Query devices and policies
+  </Card>
+  <Card title="Application Data Sources" icon="grid" href="/data-sources/applications">
+    Retrieve application data
+  </Card>
+  <Card title="Identity & Access Resources" icon="id-card" href="/resources/identity-access">
+    Manage users, groups, and policies
+  </Card>
+  <Card title="Examples" icon="code" href="/examples">
+    Browse complete examples
+  </Card>
+</CardGroup>

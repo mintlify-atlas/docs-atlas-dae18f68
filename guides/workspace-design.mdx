@@ -1,0 +1,520 @@
+---
+title: Workspace design patterns
+description: Guide to designing effective Terraform workspace architectures for managing Microsoft 365 resources at scale
+---
+
+This guide covers workspace design patterns and best practices for organizing Terraform configurations when managing Microsoft 365 resources. Understanding workspace architecture is critical for maintaining scalability, security, and operational efficiency.
+
+## What are Terraform workspaces?
+
+Terraform workspaces are isolated instances of state data that allow you to manage multiple environments or logical groupings of infrastructure using the same configuration code. Each workspace maintains its own state file, enabling parallel development and deployment workflows.
+
+### Workspaces vs. State Files
+
+```
+┌─────────────────────────┐
+│ Terraform Configuration │
+└───────────┬─────────────┘
+            │
+            ├─────────────────┬─────────────────┬─────────────────┐
+            │                 │                 │                 │
+            ▼                 ▼                 ▼                 ▼
+    ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+    │  Workspace:   │ │  Workspace:   │ │  Workspace:   │ │  Workspace:   │
+    │  Production   │ │   Staging     │ │ Development   │ │    Testing    │
+    └───────┬───────┘ └───────┬───────┘ └───────┬───────┘ └───────┬───────┘
+            │                 │                 │                 │
+            ▼                 ▼                 ▼                 ▼
+    ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+    │    State:     │ │    State:     │ │    State:     │ │    State:     │
+    │prod.tfstate   │ │staging.tfstate│ │ dev.tfstate   │ │ test.tfstate  │
+    └───────────────┘ └───────────────┘ └───────────────┘ └───────────────┘
+```
+
+**Key Concepts:**
+- Each workspace has its own state file
+- Workspaces share the same configuration code
+- Variables can differentiate behavior between workspaces
+- State isolation prevents accidental cross-environment changes
+
+## Why use workspaces?
+
+### Benefits for Microsoft 365 Management
+
+<CardGroup cols={2}>
+  <Card title="Logical Isolation" icon="shield">
+    Separate state for different Microsoft 365 service areas (Intune, Entra ID, Security)
+  </Card>
+  
+  <Card title="Scale Management" icon="chart-line">
+    Split large configurations to stay within Microsoft Graph API throttling limits
+  </Card>
+  
+  <Card title="Team Collaboration" icon="users">
+    Enable multiple teams to work independently on different areas
+  </Card>
+  
+  <Card title="Risk Mitigation" icon="triangle-exclamation">
+    Limit blast radius of configuration errors to specific workspaces
+  </Card>
+</CardGroup>
+
+## When to use multiple workspaces
+
+Use multiple workspaces when:
+
+- Managing 500+ Microsoft 365 resources
+- Different teams manage different service areas
+- You need independent deployment schedules
+- API throttling becomes a concern
+- You want to minimize state file size and refresh time
+
+### State File Size and Performance
+
+Split workspaces when you reach these thresholds:
+
+| Metric | Performance Impact | Recommendation |
+|--------|-------------------|----------------|
+| < 200 resources | Minimal | Single workspace usually optimal |
+| 200-500 resources | Noticeable plan duration | Consider splitting by service or volatility |
+| 500-1000 resources | Significant delays | Strong recommendation to split |
+| 1000+ resources | Severe performance degradation | Must split for operational efficiency |
+| State file > 5MB | Plan/apply slowdown begins | Evaluate workspace boundaries |
+| State file > 10MB | Severe performance impact | Immediate splitting required |
+
+**Check your state size:**
+
+```bash
+# For Terraform Cloud workspace
+terraform state pull | wc -c
+
+# For local/remote state  
+ls -lh terraform.tfstate
+```
+
+<Note>
+**Microsoft Graph API Context:**
+- 500 resources ≈ 1500-2000 API calls per `terraform plan`
+- With `-parallelism=1` requirement (due to API throttling), large workspaces = long plan times
+- Example: 1000 resources = 30-60 minute plan duration with parallelism=1
+- Splitting reduces per-workspace API quota consumption and improves plan/apply speed
+</Note>
+
+## Workspace-to-repository relationship
+
+<Warning>
+In Terraform Cloud, **each workspace connects to exactly ONE VCS repository** (and optionally a specific directory within that repository). You cannot connect multiple repositories to a single workspace.
+</Warning>
+
+### Common Repository Patterns
+
+<AccordionGroup>
+  <Accordion title="Separate repos per workspace">
+    Complete isolation, independent versioning, clear ownership
+    
+    - Example: `intune-terraform` repo → `intune-prod` workspace
+    - Example: `security-terraform` repo → `security-prod` workspace
+    - **Best for:** Teams with complete autonomy, different release cycles
+  </Accordion>
+  
+  <Accordion title="Monorepo with workspace directories">
+    Shared modules, coordinated changes, single version history
+    
+    - Example: `m365-terraform` repo with directories:
+      - `/intune` → `intune-prod` workspace (working_directory = "/intune")
+      - `/security` → `security-prod` workspace (working_directory = "/security")
+      - `/identity` → `identity-prod` workspace (working_directory = "/identity")
+    - All workspaces connect to **same repository**, each specifies **different working directory**
+    - **Best for:** Coordinated releases, shared CI/CD, atomic cross-service changes
+  </Accordion>
+  
+  <Accordion title="Hybrid: Shared module repo, separate workspace repos">
+    Code reuse without deployment coupling
+    
+    - Example: `m365-modules` repo (shared modules, no workspace)
+    - Example: `intune-terraform` repo → `intune-prod` workspace (references modules)
+    - Example: `security-terraform` repo → `security-prod` workspace (references modules)
+    - **Best for:** Code reuse without deployment coupling
+  </Accordion>
+</AccordionGroup>
+
+## Workspaces + Modules: Complementary Strategies
+
+**Modules solve:** Code duplication and consistency  
+**Workspaces solve:** State isolation and team boundaries
+
+These are **complementary**, not competing strategies. Use them together for optimal design.
+
+### How They Work Together
+
+```hcl
+# Repository Structure:
+# m365-terraform-modules (repo) - Shared module definitions
+#   /compliance-policies
+#   /device-configs
+#   /conditional-access
+
+# intune-windows-terraform (repo)
+module "compliance" {
+  source = "git::https://github.com/org/m365-terraform-modules//compliance-policies?ref=v2.1.0"
+  
+  platform = "windows10"
+  # ... other config
+}
+
+# intune-macos-terraform (repo)
+module "compliance" {
+  source = "git::https://github.com/org/m365-terraform-modules//compliance-policies?ref=v2.1.0"
+  
+  platform = "macOS"
+  # ... other config
+}
+```
+
+**Key Benefits:**
+- **Consistency via modules** (DRY principle - shared logic)
+- **Isolation via workspaces** (blast radius control - separate state)
+- **Independent deployment** per workspace (team autonomy)
+- **Shared standards** without runtime dependencies
+
+## Workspace architecture patterns
+
+### Pattern 1: Monolithic Workspace
+
+A single monolithic workspace containing all Microsoft 365 resources for production.
+
+**Advantages:**
+- Simple to understand and manage
+- Easy cross-resource dependencies
+- Single point of deployment
+
+**Disadvantages:**
+- Large state files (slow refresh)
+- High API quota consumption during plan/apply
+- Single point of failure
+- Difficult team collaboration
+
+**Best For:**
+- Small deployments (less than 500 resources)
+- Single-team environments
+- Initial development and testing
+
+**Workspace Naming:**
+```
+Format: {business-unit}-{service}-{layer}-{env}
+
+Examples:
+- it-m365-all-prod
+- it-m365-all-staging
+- m365-prod
+- m365-staging
+```
+
+### Pattern 2: Environment-Based Workspaces
+
+Separate monolithic workspaces containing all resources for a specific environment.
+
+<Steps>
+  <Step title="Development Workspace">
+    Test policies, dev configs, experimental features
+  </Step>
+  
+  <Step title="Staging Workspace">
+    Pre-production validation, staging configs
+  </Step>
+  
+  <Step title="Production Workspace">
+    Live policies, production configs
+  </Step>
+</Steps>
+
+**Advantages:**
+- Clear environment separation
+- Progressive deployment (dev → staging → prod)
+- Safe testing of changes
+- Parallel environment management
+
+**Disadvantages:**
+- Still faces scale issues within each environment
+- Requires variable management for environment differences
+- State size grows with production scale
+
+**Best For:**
+- Organizations with formal change promotion processes
+- Multi-environment testing requirements
+- Standard DevOps workflows
+
+**Workspace Naming:**
+```
+Examples:
+- it-m365-all-prod
+- it-m365-all-staging
+- it-m365-all-dev
+- m365-prod
+- m365-staging
+- m365-dev
+```
+
+### Pattern 3: Service-Domain-Based Workspaces
+
+Separate terraform workspaces by Microsoft 365 service domain area.
+
+<Tabs>
+  <Tab title="Intune Device">
+    - Device Compliance Policies
+    - Device Configurations
+    - Update Policies
+  </Tab>
+  
+  <Tab title="Intune App">
+    - App Configurations
+    - App Protection Policies
+    - Managed Apps
+  </Tab>
+  
+  <Tab title="Security">
+    - Conditional Access
+    - Named Locations
+    - Security Policies
+  </Tab>
+  
+  <Tab title="Identity">
+    - Groups
+    - Users
+    - License Assignments
+  </Tab>
+</Tabs>
+
+**Advantages:**
+- Smaller state files (faster operations)
+- Reduced API throttling risk per workspace
+- Team ownership by service area
+- Independent deployment schedules
+- Limited blast radius for errors
+
+**Disadvantages:**
+- Complex cross-workspace dependencies
+- Requires careful coordination
+- More infrastructure to manage
+- Data sharing between workspaces
+
+**Best For:**
+- Large deployments (1000+ resources)
+- Organizations with specialized teams (Intune team, Security team, etc.)
+- High-change-frequency environments
+
+**Workspace Naming:**
+```
+Examples:
+- it-m365-intune-device-prod
+- it-m365-intune-app-prod
+- it-m365-security-policies-prod
+- it-m365-identity-groups-prod
+
+Alternative (service-first):
+- intune-device-prod
+- intune-app-prod
+- security-policies-prod
+```
+
+### Pattern 4: Service Domain with Shared Dependencies
+
+Service-specific workspaces with a dedicated shared workspace for common resources used across domains.
+
+```hcl
+# Shared-Common-Workspace
+# - Entra ID Groups (All Teams)
+# - Conditional Access Policies (Cross-Service)
+# - Named Locations
+# - Common Compliance Policies
+
+# Intune-Workspace (references shared)
+data "terraform_remote_state" "shared" {
+  backend = "remote"
+  
+  config = {
+    organization = "my-org"
+    workspaces = {
+      name = "m365-shared-prod"
+    }
+  }
+}
+
+resource "microsoft365_graph_beta_device_configuration" "windows_baseline" {
+  # ... config
+  
+  assignments = [{
+    target = {
+      group_id = data.terraform_remote_state.shared.outputs.security_group_id
+    }
+  }]
+}
+```
+
+**Advantages:**
+- Eliminates duplicate resource definitions
+- Single source of truth for shared resources
+- Reduces cross-workspace dependency complexity
+- Prevents resource conflicts
+
+**Disadvantages:**
+- Shared workspace becomes critical dependency
+- All deployments must wait for shared workspace
+- Requires careful output management
+- Potential bottleneck for changes
+
+**Best For:**
+- Medium to large organizations (1000-5000 resources)
+- Organizations with clear common resources (groups, CA policies)
+- Teams that need shared infrastructure but independent deployments
+
+**Workspace Naming:**
+```
+Examples:
+- it-m365-shared-common-prod
+- it-m365-intune-main-prod
+- it-m365-security-policies-prod
+- m365-shared-prod
+- m365-intune-prod
+```
+
+### Pattern 5: Self-Contained Service Domain
+
+Each service domain workspace contains all its dependencies, with no external references.
+
+**Advantages:**
+- Complete autonomy per workspace
+- No cross-workspace dependencies
+- Independent deployment cycles
+- Easier rollback and testing
+- Parallel development without coordination
+
+**Disadvantages:**
+- Resource duplication (groups, policies)
+- Potential naming conflicts
+- Harder to enforce standards across workspaces
+- More resources to manage overall
+
+**Best For:**
+- Organizations with completely independent teams
+- Services with minimal resource overlap
+- Development/testing environments
+- When deployment speed is critical
+
+## Key considerations when choosing a pattern
+
+Before selecting a workspace pattern, evaluate these factors:
+
+<AccordionGroup>
+  <Accordion title="Resource Scale">
+    - Total number of resources under management
+    - State file size and performance implications
+    - API call volume per `terraform plan`/`terraform apply` operation
+    - Threshold considerations: under 200 (minimal), 200-500 (noticeable), 500-1000 (significant), 1000+ (severe)
+  </Accordion>
+  
+  <Accordion title="Team Structure & Ownership">
+    - Single team vs. multiple teams
+    - Service-based ownership (Intune team, Security team)
+    - Service domain subdivision (Windows team, macOS team within Intune)
+    - Function-based ownership (Foundation team, Policy team, Apps team)
+  </Accordion>
+  
+  <Accordion title="Deployment Frequency">
+    - How often are resource changes deployed: monthly, weekly, daily, multiple times per day
+    - Whether all resources change at similar rates or vary significantly
+    - Need for rapid iteration vs. stability
+    - Frequency of handoffs between teams
+  </Accordion>
+  
+  <Accordion title="Change Volatility">
+    - Do some resources rarely change (groups, tenant settings) while others change frequently (app configs, scripts)?
+    - Different approval/testing requirements based on change frequency
+    - Protecting stable configuration from frequent changes
+  </Accordion>
+  
+  <Accordion title="Cross-Workspace Dependencies">
+    - How much resources depend on each other across service domains
+    - Shared infrastructure requirements: groups, CA policies, named locations
+    - Tolerance for remote state coupling
+    - Risk of circular dependencies
+  </Accordion>
+</AccordionGroup>
+
+## Managing cross-workspace dependencies
+
+When using multiple workspaces, resources often need to reference data from other workspaces. Use Terraform's `terraform_remote_state` data source:
+
+```hcl
+# In shared workspace - outputs.tf
+output "security_group_ids" {
+  value = {
+    engineering = microsoft365_graph_beta_groups_group.engineering.id
+    finance     = microsoft365_graph_beta_groups_group.finance.id
+  }
+}
+
+# In consuming workspace - main.tf
+data "terraform_remote_state" "shared" {
+  backend = "remote"
+  
+  config = {
+    organization = "my-org"
+    workspaces = {
+      name = "m365-shared-prod"
+    }
+  }
+}
+
+resource "microsoft365_graph_beta_conditional_access_policy" "require_mfa" {
+  # ...
+  
+  conditions {
+    users {
+      include_groups = [
+        data.terraform_remote_state.shared.outputs.security_group_ids.engineering
+      ]
+    }
+  }
+}
+```
+
+## Workspace naming conventions
+
+Consistent naming is critical for managing multiple workspaces:
+
+```
+Format: {business-unit}-{service}-{layer}-{env}
+
+Components:
+- business-unit: it, engineering, finance (optional)
+- service: m365, intune, security, identity
+- layer: all, device, app, policies, shared, common
+- env: prod, staging, dev, qa
+
+Examples:
+- it-m365-intune-device-prod
+- engineering-m365-security-policies-staging
+- finance-m365-shared-common-prod
+- m365-intune-app-prod
+```
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Terraform workspaces" icon="layer-group" href="https://developer.hashicorp.com/terraform/language/state/workspaces">
+    Official Terraform workspaces documentation
+  </Card>
+  
+  <Card title="Remote state" icon="server" href="https://developer.hashicorp.com/terraform/language/state/remote-state-data">
+    Using remote state data sources
+  </Card>
+  
+  <Card title="Multi-tenant management" icon="building">
+    Patterns for managing multiple M365 tenants
+  </Card>
+  
+  <Card title="Terraform best practices" icon="star">
+    Best practices for Terraform with M365
+  </Card>
+</CardGroup>

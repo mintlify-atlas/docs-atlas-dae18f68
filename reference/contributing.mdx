@@ -1,0 +1,376 @@
+---
+title: Contributing Guide
+description: How to contribute to the Community Microsoft 365 Terraform Provider
+---
+
+Thanks for considering contributing to this project! We are glad you are reading this, because we need volunteer developers to help this project reach its full potential.
+
+<Note>
+  Please note we have a code of conduct. Please follow it in all your interactions with the project.
+</Note>
+
+## Ways to Contribute
+
+There are many ways to contribute to the project:
+
+<CardGroup cols={2}>
+  <Card title="Report Bugs" icon="bug">
+    File issues for bugs, errors, or unexpected behavior
+  </Card>
+  
+  <Card title="Request Features" icon="lightbulb">
+    Suggest new resources, data sources, or improvements
+  </Card>
+  
+  <Card title="Improve Documentation" icon="book">
+    Fix typos, add examples, or clarify existing docs
+  </Card>
+  
+  <Card title="Contribute Code" icon="code">
+    Implement new resources, fix bugs, or improve performance
+  </Card>
+  
+  <Card title="Write Tests" icon="flask">
+    Add unit tests, acceptance tests, or improve test coverage
+  </Card>
+  
+  <Card title="Answer Questions" icon="comments">
+    Help other users in GitHub issues or Discord
+  </Card>
+</CardGroup>
+
+## Getting Started
+
+### Prerequisites
+
+Before you start contributing, ensure you have:
+
+- **Go 1.21+** installed
+- **Terraform 1.5+** installed
+- **Git** for version control
+- A **Microsoft 365 tenant** with appropriate permissions for testing
+- Familiarity with **Terraform** and **Go** programming
+
+### Setting Up Your Development Environment
+
+<Steps>
+  <Step title="Fork the Repository">
+    Fork the [terraform-provider-microsoft365](https://github.com/deploymenttheory/terraform-provider-microsoft365) repository to your GitHub account.
+  </Step>
+  
+  <Step title="Clone Your Fork">
+    ```bash
+    git clone https://github.com/YOUR-USERNAME/terraform-provider-microsoft365.git
+    cd terraform-provider-microsoft365
+    ```
+  </Step>
+  
+  <Step title="Add Upstream Remote">
+    ```bash
+    git remote add upstream https://github.com/deploymenttheory/terraform-provider-microsoft365.git
+    ```
+  </Step>
+  
+  <Step title="Install Dependencies">
+    ```bash
+    go mod download
+    go mod tidy
+    ```
+  </Step>
+  
+  <Step title="Build the Provider">
+    ```bash
+    go build -o terraform-provider-microsoft365
+    ```
+  </Step>
+</Steps>
+
+## Contributing Code
+
+### Development Workflow
+
+<Steps>
+  <Step title="Create a Feature Branch">
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+    
+    Branch naming conventions:
+    - `feature/` - New features or resources
+    - `fix/` - Bug fixes
+    - `docs/` - Documentation changes
+    - `test/` - Test improvements
+  </Step>
+  
+  <Step title="Make Your Changes">
+    Follow the [Development Guide](/reference/development-guide) for implementing new resources or features.
+    
+    Key principles:
+    - Follow existing code patterns and structure
+    - Write clear, self-documenting code
+    - Add appropriate comments for complex logic
+    - Include error handling and validation
+  </Step>
+  
+  <Step title="Write Tests">
+    All code contributions must include tests:
+    - **Unit tests** for helper functions and logic
+    - **Acceptance tests** for resource CRUD operations
+    
+    Run tests locally:
+    ```bash
+    # Run unit tests
+    go test ./...
+    
+    # Run acceptance tests (requires M365 tenant)
+    TF_ACC=1 go test -v ./internal/resources/...
+    ```
+  </Step>
+  
+  <Step title="Run Linters">
+    Ensure code quality with linters:
+    ```bash
+    # Run golangci-lint
+    golangci-lint run
+    
+    # Format code
+    go fmt ./...
+    ```
+  </Step>
+  
+  <Step title="Update Documentation">
+    If adding new resources:
+    - Create example `.tf` files in `examples/resources/`
+    - Add Terraform Registry template in `templates/resources/`
+    - Update relevant documentation files
+  </Step>
+  
+  <Step title="Commit Your Changes">
+    Write clear, descriptive commit messages:
+    ```bash
+    git add .
+    git commit -m "feat: add support for windows autopilot policy resource"
+    ```
+    
+    Commit message format:
+    - `feat:` - New features
+    - `fix:` - Bug fixes
+    - `docs:` - Documentation changes
+    - `test:` - Test changes
+    - `refactor:` - Code refactoring
+    - `chore:` - Maintenance tasks
+  </Step>
+  
+  <Step title="Push and Create Pull Request">
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+    
+    Then create a pull request on GitHub with:
+    - Clear description of changes
+    - Link to related issues
+    - Testing evidence (screenshots, test output)
+    - Breaking changes (if any)
+  </Step>
+</Steps>
+
+### Pull Request Guidelines
+
+When creating a pull request:
+
+<Accordion title="PR Checklist">
+  - [ ] Code follows existing style and patterns
+  - [ ] All tests pass locally
+  - [ ] New tests added for new functionality
+  - [ ] Documentation updated (if applicable)
+  - [ ] Examples provided for new resources
+  - [ ] Commit messages follow conventional format
+  - [ ] PR description clearly explains changes
+  - [ ] No breaking changes (or clearly documented)
+  - [ ] Linters pass without errors
+</Accordion>
+
+<Accordion title="Code Review Process">
+  1. **Automated Checks**: CI/CD pipelines run tests and linters
+  2. **Maintainer Review**: Project maintainers review code quality and design
+  3. **Feedback Iteration**: Address feedback and make requested changes
+  4. **Approval**: Once approved, maintainers merge the PR
+  5. **Release**: Changes included in next provider release
+</Accordion>
+
+## Reporting Issues
+
+If you find a bug or want to suggest an enhancement:
+
+### Bug Reports
+
+<Steps>
+  <Step title="Search Existing Issues">
+    Check if the issue already exists in [GitHub Issues](https://github.com/deploymenttheory/terraform-provider-microsoft365/issues)
+  </Step>
+  
+  <Step title="Use Bug Report Template">
+    Create a new issue using the bug report template and provide:
+    - Clear, descriptive title
+    - Provider version
+    - Terraform version
+    - Operating system
+    - Resource name (if applicable)
+    - Steps to reproduce
+    - Expected behavior
+    - Actual behavior
+    - Error messages and logs
+    - Terraform configuration (sanitized)
+  </Step>
+  
+  <Step title="Add Labels">
+    Tag the issue appropriately:
+    - `bug` - For bugs
+    - `documentation` - For docs issues
+    - `question` - For questions
+  </Step>
+</Steps>
+
+### Feature Requests
+
+<Steps>
+  <Step title="Check Roadmap">
+    Review the [Provider Roadmap](/reference/provider-roadmap) to see if the feature is already planned
+  </Step>
+  
+  <Step title="Create Feature Request">
+    Use the feature request template and include:
+    - Clear description of the feature
+    - Use case and business justification
+    - Microsoft Graph API resource/endpoint
+    - Priority (critical/high/medium/low)
+    - Examples of desired Terraform configuration
+    - Dependencies or related features
+  </Step>
+  
+  <Step title="Engage in Discussion">
+    Participate in discussions about:
+    - Implementation approach
+    - API compatibility
+    - Schema design
+    - Breaking changes
+  </Step>
+</Steps>
+
+## Code Style and Standards
+
+### Go Code Style
+
+- Follow [Effective Go](https://golang.org/doc/effective_go.html) guidelines
+- Use `gofmt` for code formatting
+- Follow existing patterns in the codebase
+- Write idiomatic Go code
+- Use meaningful variable and function names
+- Keep functions focused and concise
+
+### Terraform Configuration Style
+
+- Use consistent indentation (2 spaces)
+- Follow [Terraform style conventions](https://www.terraform.io/docs/language/syntax/style.html)
+- Provide meaningful resource names and descriptions
+- Include comments for complex configurations
+
+### Documentation Style
+
+- Use clear, concise language
+- Provide practical examples
+- Link to relevant Microsoft documentation
+- Include API permissions required
+- Document known limitations
+- Keep examples up-to-date
+
+## Testing Requirements
+
+### Unit Tests
+
+Required for:
+- Helper functions
+- Data transformation logic
+- Validation functions
+- State mapping functions
+
+```go
+func TestConstructResource(t *testing.T) {
+    // Test implementation
+}
+```
+
+### Acceptance Tests
+
+Required for:
+- All new resources
+- All resource CRUD operations
+- Resource import functionality
+
+```go
+func TestAccResourceTemplate_basic(t *testing.T) {
+    resource.Test(t, resource.TestCase{
+        // Test implementation
+    })
+}
+```
+
+<Warning>
+  Acceptance tests require a valid Microsoft 365 tenant and may create/modify real resources. Use a dedicated test tenant.
+</Warning>
+
+## Community Guidelines
+
+### Code of Conduct
+
+We are committed to providing a welcoming and inclusive environment. All contributors must:
+
+- Be respectful and considerate
+- Accept constructive criticism gracefully
+- Focus on what is best for the community
+- Show empathy towards other community members
+- Avoid harassment, discrimination, or inappropriate behavior
+
+### Getting Help
+
+If you need help:
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/Uq8zG6g7WE">
+    Join our Discord for real-time discussions and help
+  </Card>
+  
+  <Card title="GitHub Discussions" icon="github" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/discussions">
+    Ask questions and discuss ideas
+  </Card>
+  
+  <Card title="GitHub Issues" icon="circle-question" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/issues">
+    Report bugs and request features
+  </Card>
+  
+  <Card title="Development Guide" icon="book" href="/reference/development-guide">
+    Read the comprehensive development guide
+  </Card>
+</CardGroup>
+
+## License
+
+By contributing to this project, you agree that your contributions will be licensed under the same license as the project (see [LICENSE](https://github.com/deploymenttheory/terraform-provider-microsoft365/blob/main/LICENSE) file).
+
+## Recognition
+
+Contributors will be:
+- Listed in release notes for their contributions
+- Recognized in the project README
+- Part of a growing community of M365 automation enthusiasts
+
+<Tip>
+  Even small contributions make a big difference! Don't hesitate to contribute documentation improvements, bug reports, or small fixes.
+</Tip>
+
+## Related Resources
+
+- [Development Guide](/reference/development-guide) - Detailed development workflows
+- [Provider Roadmap](/reference/provider-roadmap) - Planned features
+- [Known Issues](/reference/known-issues) - Current bugs and limitations
+- [GitHub Repository](https://github.com/deploymenttheory/terraform-provider-microsoft365) - Source code

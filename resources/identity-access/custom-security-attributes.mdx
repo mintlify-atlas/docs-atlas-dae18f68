@@ -1,0 +1,243 @@
+---
+title: Custom Security Attributes
+description: Extend Azure AD with business-specific attributes for users, groups, and applications
+---
+
+Custom security attributes allow you to define and assign business-specific metadata to Azure AD objects, enabling fine-grained access control and organizational categorization.
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Attribute Set" icon="folder">
+    **Resource**: `microsoft365_graph_beta_identity_and_access_attribute_set`
+  </Card>
+  
+  <Card title="Attribute Definition" icon="tag">
+    **Resource**: `microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition`
+  </Card>
+  
+  <Card title="Allowed Values" icon="list">
+    **Resource**: `microsoft365_graph_beta_identity_and_access_custom_security_attribute_allowed_value`
+  </Card>
+</CardGroup>
+
+## Attribute Set
+
+Create a container for related attributes:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_attribute_set" "organization" {
+  id          = "Organization"
+  description = "Organizational attributes for access control"
+}
+```
+
+## Attribute Definition
+
+<CodeGroup>
+```hcl String Attribute
+resource "microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition" "department" {
+  attribute_set = microsoft365_graph_beta_identity_and_access_attribute_set.organization.id
+  name          = "Department"
+  description   = "User's department"
+  
+  data_type     = "String"
+  is_collection = false
+  is_searchable = true
+  
+  status       = "Available"
+  use_predefined_values_only = false
+}
+```
+
+```hcl with Predefined Values
+resource "microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition" "clearance_level" {
+  attribute_set = microsoft365_graph_beta_identity_and_access_attribute_set.organization.id
+  name          = "ClearanceLevel"
+  description   = "Security clearance level"
+  
+  data_type     = "String"
+  is_collection = false
+  is_searchable = true
+  
+  status       = "Available"
+  use_predefined_values_only = true
+}
+
+# Define allowed values
+resource "microsoft365_graph_beta_identity_and_access_custom_security_attribute_allowed_value" "public" {
+  attribute_set_id     = microsoft365_graph_beta_identity_and_access_attribute_set.organization.id
+  attribute_definition = microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition.clearance_level.name
+  
+  id          = "Public"
+  is_active   = true
+}
+
+resource "microsoft365_graph_beta_identity_and_access_custom_security_attribute_allowed_value" "confidential" {
+  attribute_set_id     = microsoft365_graph_beta_identity_and_access_attribute_set.organization.id
+  attribute_definition = microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition.clearance_level.name
+  
+  id          = "Confidential"
+  is_active   = true
+}
+
+resource "microsoft365_graph_beta_identity_and_access_custom_security_attribute_allowed_value" "secret" {
+  attribute_set_id     = microsoft365_graph_beta_identity_and_access_attribute_set.organization.id
+  attribute_definition = microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition.clearance_level.name
+  
+  id          = "Secret"
+  is_active   = true
+}
+```
+
+```hcl Integer Attribute
+resource "microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition" "cost_center" {
+  attribute_set = microsoft365_graph_beta_identity_and_access_attribute_set.organization.id
+  name          = "CostCenter"
+  description   = "Cost center number"
+  
+  data_type     = "Integer"
+  is_collection = false
+  is_searchable = true
+  status       = "Available"
+}
+```
+
+```hcl Collection Attribute
+resource "microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition" "projects" {
+  attribute_set = microsoft365_graph_beta_identity_and_access_attribute_set.organization.id
+  name          = "Projects"
+  description   = "Assigned projects"
+  
+  data_type     = "String"
+  is_collection = true
+  is_searchable = true
+  status       = "Available"
+}
+```
+</CodeGroup>
+
+## Data Types
+
+| Type | Description | Example |
+|------|-------------|----------|
+| String | Text values | "Engineering", "Sales" |
+| Integer | Numeric values | 12345 |
+| Boolean | True/false | true, false |
+
+## Assign to Users
+
+```hcl
+resource "microsoft365_graph_beta_users_user" "employee" {
+  display_name        = "John Doe"
+  user_principal_name = "john.doe@contoso.com"
+  account_enabled     = true
+  mail_nickname       = "johndoe"
+  
+  password_profile = {
+    password = "SecurePassword123!"
+  }
+  
+  custom_security_attributes = {
+    Organization = {
+      "@odata.type" = "#microsoft.graph.customSecurityAttributeValue"
+      Department    = "Engineering"
+      ClearanceLevel = "Confidential"
+      CostCenter    = 1001
+      Projects      = ["ProjectA", "ProjectB"]
+    }
+  }
+}
+```
+
+## Use in Conditional Access
+
+Filter users based on custom attributes:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "high_clearance" {
+  display_name = "High Clearance Access"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      # Filter by custom security attribute
+      # Note: Actual filtering syntax depends on implementation
+    }
+    
+    applications = {
+      include_applications = ["SensitiveApp"]
+    }
+  }
+  
+  grant_controls = {
+    operator = "OR"
+    authentication_strength = {
+      id = "00000000-0000-0000-0000-000000000004"
+    }
+  }
+}
+```
+
+## Common Use Cases
+
+<AccordionGroup>
+  <Accordion title="Department-based access control">
+    Assign departments to users and use them to control access to resources.
+  </Accordion>
+
+  <Accordion title="Project assignments">
+    Track which projects users are assigned to for resource allocation and access.
+  </Accordion>
+
+  <Accordion title="Security clearance levels">
+    Define clearance levels and restrict access to sensitive data accordingly.
+  </Accordion>
+
+  <Accordion title="Cost center tracking">
+    Assign cost centers for chargeback and reporting purposes.
+  </Accordion>
+
+  <Accordion title="Regulatory compliance">
+    Tag users with compliance requirements (HIPAA, PCI-DSS, etc.).
+  </Accordion>
+</AccordionGroup>
+
+## Import Syntax
+
+```bash
+# Attribute set
+terraform import microsoft365_graph_beta_identity_and_access_attribute_set.set <set-id>
+
+# Attribute definition
+terraform import microsoft365_graph_beta_identity_and_access_custom_security_attribute_definition.attr <set-id>_<attr-name>
+
+# Allowed value
+terraform import microsoft365_graph_beta_identity_and_access_custom_security_attribute_allowed_value.value <set-id>_<attr-name>_<value-id>
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Plan your attribute schema">
+    Design your attribute structure before implementation. Attributes cannot be deleted, only deprecated.
+  </Accordion>
+
+  <Accordion title="Use predefined values for consistency">
+    Set `use_predefined_values_only = true` for attributes that should have a controlled vocabulary.
+  </Accordion>
+
+  <Accordion title="Make attributes searchable">
+    Enable `is_searchable` to allow filtering and querying by attribute values.
+  </Accordion>
+
+  <Accordion title="Document attribute purpose">
+    Use clear descriptions to explain what each attribute represents and how it should be used.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Users](/resources/groups-users/users)
+- [Groups](/resources/groups-users/groups)
+- [Conditional Access](/resources/identity-access/conditional-access)

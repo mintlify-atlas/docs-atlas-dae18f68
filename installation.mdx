@@ -1,0 +1,677 @@
+---
+title: Installation
+description: Complete installation and configuration guide for the Microsoft 365 Terraform Provider
+---
+
+This guide covers everything you need to install and configure the Microsoft 365 Terraform Provider, including setting up authentication and API permissions.
+
+## Prerequisites
+
+### Terraform version
+
+The Microsoft 365 provider requires:
+
+- **Terraform >= 1.14.x**
+
+You can download Terraform from the [official website](https://www.terraform.io/downloads).
+
+To check your Terraform version:
+
+```bash
+terraform version
+```
+
+### Microsoft 365 requirements
+
+You'll need:
+
+- A **Microsoft 365 tenant** with appropriate licenses
+- **Global Administrator** or sufficient permissions to create Entra ID app registrations
+- Access to the [Azure Portal](https://portal.azure.com) or [Entra ID Admin Center](https://entra.microsoft.com)
+
+## Step 1: Add the provider to your configuration
+
+Create or update your Terraform configuration to include the provider:
+
+```hcl
+terraform {
+  required_version = ">= 1.14.0"
+  
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"
+    }
+  }
+}
+```
+
+<Note>
+Replace `~> 0.40.0` with the latest version from the [Terraform Registry](https://registry.terraform.io/providers/deploymenttheory/microsoft365/latest). The provider follows [Semantic Versioning](https://semver.org/).
+</Note>
+
+## Step 2: Initialize Terraform
+
+Run the following command to download and install the provider:
+
+```bash
+terraform init
+```
+
+You should see output confirming the provider installation:
+
+```
+Initializing provider plugins...
+- Finding deploymenttheory/microsoft365 versions matching "~> 0.40.0"...
+- Installing deploymenttheory/microsoft365 v0.40.x...
+- Installed deploymenttheory/microsoft365 v0.40.x
+```
+
+## Step 3: Create an Entra ID application
+
+The provider uses an Entra ID (formerly Azure AD) application registration for authentication.
+
+<Accordion title="Create application via Azure Portal (recommended for beginners)">
+
+1. Sign in to the [Azure Portal](https://portal.azure.com)
+2. Navigate to **Microsoft Entra ID** (formerly Azure Active Directory)
+3. Select **App registrations** from the left menu
+4. Click **+ New registration**
+5. Configure the application:
+   - **Name**: `Terraform Microsoft 365 Provider` (or your preferred name)
+   - **Supported account types**: Select "Accounts in this organizational directory only"
+   - **Redirect URI**: Leave blank for client credentials flow
+6. Click **Register**
+
+After registration, you'll see the application overview page. Note the following values:
+
+- **Application (client) ID** - You'll use this as `client_id`
+- **Directory (tenant) ID** - You'll use this as `tenant_id`
+
+</Accordion>
+
+<Accordion title="Create application via Azure CLI">
+
+```bash
+# Create the application
+az ad app create --display-name "Terraform Microsoft 365 Provider"
+
+# Get the application details
+az ad app list --display-name "Terraform Microsoft 365 Provider" \
+  --query "[].{appId:appId, displayName:displayName}"
+
+# Get your tenant ID
+az account show --query tenantId -o tsv
+```
+
+</Accordion>
+
+<Accordion title="Create application via PowerShell">
+
+```powershell
+# Connect to Microsoft Graph
+Connect-MgGraph -Scopes "Application.ReadWrite.All"
+
+# Create the application
+$app = New-MgApplication -DisplayName "Terraform Microsoft 365 Provider"
+
+# Display the application details
+$app | Select-Object AppId, DisplayName
+
+# Get your tenant ID
+(Get-MgContext).TenantId
+```
+
+</Accordion>
+
+## Step 4: Create a client secret or certificate
+
+You need to create credentials for authentication. You can use either a client secret (easier) or a certificate (more secure).
+
+<Tabs>
+  <Tab title="Client Secret">
+
+### Create a client secret
+
+#### Via Azure Portal
+
+1. In your application's page, select **Certificates & secrets**
+2. Under **Client secrets**, click **+ New client secret**
+3. Add a description (e.g., "Terraform Provider Secret")
+4. Select an expiration period:
+   - **180 days (6 months)** - Recommended for testing
+   - **365 days (12 months)** - For development
+   - **730 days (24 months)** - For production (with rotation plan)
+5. Click **Add**
+6. **Important**: Copy the secret **Value** immediately - it will only be shown once
+
+<Warning>
+The client secret value is only displayed once after creation. If you lose it, you'll need to create a new secret.
+</Warning>
+
+#### Via Azure CLI
+
+```bash
+# Create a client secret (valid for 1 year)
+az ad app credential reset --id <app-id> --append \
+  --display-name "Terraform Provider Secret" \
+  --years 1
+```
+
+#### Via PowerShell
+
+```powershell
+# Create a client secret (valid for 6 months)
+$passwordCred = @{
+    displayName = 'Terraform Provider Secret'
+    endDateTime = (Get-Date).AddMonths(6)
+}
+
+Add-MgApplicationPassword -ApplicationId <app-id> -PasswordCredential $passwordCred
+```
+
+  </Tab>
+  
+  <Tab title="Client Certificate">
+
+### Create and upload a certificate
+
+Certificate-based authentication is more secure than client secrets and recommended for production environments.
+
+#### Generate a self-signed certificate with OpenSSL
+
+```bash
+# Generate a private key and certificate
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 \
+  -subj "/CN=Terraform Microsoft 365 Provider"
+
+# Convert to PKCS#12 format (.pfx)
+openssl pkcs12 -export -out certificate.pfx -inkey key.pem -in cert.pem
+
+# You'll be prompted to set a password for the .pfx file
+```
+
+#### Upload the certificate to Entra ID
+
+**Via Azure Portal:**
+
+1. In your application's page, select **Certificates & secrets**
+2. Under **Certificates**, click **Upload certificate**
+3. Select the `cert.pem` file (public key only)
+4. Add a description and click **Add**
+
+**Via Azure CLI:**
+
+```bash
+az ad app credential reset --id <app-id> --cert @cert.pem --append
+```
+
+**Via PowerShell:**
+
+```powershell
+$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("cert.pem")
+$certValue = [System.Convert]::ToBase64String($cert.GetRawCertData())
+
+Update-MgApplication -ApplicationId <app-id> -KeyCredentials @{
+    Type = "AsymmetricX509Cert"
+    Usage = "Verify"
+    Key = [System.Text.Encoding]::ASCII.GetBytes($certValue)
+}
+```
+
+<Info>
+Store the `.pfx` file and password securely. You'll need both to configure the provider. Never commit these to version control.
+</Info>
+
+  </Tab>
+</Tabs>
+
+## Step 5: Grant API permissions
+
+Your application needs Microsoft Graph API permissions to manage Microsoft 365 resources.
+
+### Required permissions
+
+The specific permissions depend on which resources you'll manage. Here are common permission sets:
+
+<Accordion title="Basic user and group management">
+
+**Application permissions** (recommended for automation):
+
+- `User.ReadWrite.All` - Create, read, update, and delete users
+- `Group.ReadWrite.All` - Create, read, update, and delete groups
+- `GroupMember.ReadWrite.All` - Manage group memberships
+- `Directory.ReadWrite.All` - Read and write directory data
+
+</Accordion>
+
+<Accordion title="Conditional Access and security">
+
+**Application permissions**:
+
+- `Policy.ReadWrite.ConditionalAccess` - Manage conditional access policies
+- `Policy.ReadWrite.AuthenticationMethod` - Manage authentication methods
+- `RoleManagement.ReadWrite.Directory` - Manage directory roles
+- `Application.ReadWrite.All` - Manage applications and service principals
+
+</Accordion>
+
+<Accordion title="Intune and device management">
+
+**Application permissions**:
+
+- `DeviceManagementConfiguration.ReadWrite.All` - Manage device configurations
+- `DeviceManagementManagedDevices.ReadWrite.All` - Manage devices
+- `DeviceManagementApps.ReadWrite.All` - Manage mobile apps
+- `DeviceManagementServiceConfig.ReadWrite.All` - Manage service configuration
+
+</Accordion>
+
+<Accordion title="Microsoft Teams">
+
+**Application permissions**:
+
+- `TeamSettings.ReadWrite.All` - Manage team settings
+- `TeamsApp.ReadWrite.All` - Manage Teams apps
+
+</Accordion>
+
+### Add permissions via Azure Portal
+
+1. In your application's page, select **API permissions**
+2. Click **+ Add a permission**
+3. Select **Microsoft Graph**
+4. Choose **Application permissions** (for service-to-service authentication)
+5. Search for and select the permissions you need
+6. Click **Add permissions**
+7. **Important**: Click **Grant admin consent for [Your Organization]**
+
+<Warning>
+Application permissions require admin consent. Without admin consent, the provider will fail with permission errors.
+</Warning>
+
+### Add permissions via Azure CLI
+
+```bash
+# Example: Add user and group management permissions
+az ad app permission add --id <app-id> \
+  --api 00000003-0000-0000-c000-000000000000 \
+  --api-permissions \
+    df021288-bdef-4463-88db-98f22de89214=Role \
+    62a82d76-70ea-41e2-9197-370581804d09=Role \
+    dbaae8cf-10b5-4b86-a4a1-f871c94c6695=Role
+
+# Grant admin consent
+az ad app permission admin-consent --id <app-id>
+```
+
+### Add permissions via PowerShell
+
+```powershell
+# Get the Microsoft Graph service principal
+$graphSP = Get-MgServicePrincipal -Filter "displayName eq 'Microsoft Graph'"
+
+# Define required permissions
+$permissions = @(
+    "User.ReadWrite.All",
+    "Group.ReadWrite.All",
+    "GroupMember.ReadWrite.All"
+)
+
+# Add permissions
+foreach ($permission in $permissions) {
+    $role = $graphSP.AppRoles | Where-Object { $_.Value -eq $permission }
+    New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId <app-object-id> `
+        -PrincipalId <app-object-id> `
+        -ResourceId $graphSP.Id `
+        -AppRoleId $role.Id
+}
+```
+
+## Step 6: Configure the provider
+
+Now you can configure the provider with your credentials. The provider supports 11 authentication methods.
+
+### Method 1: Client Secret (most common)
+
+<CodeGroup>
+
+```hcl Provider Configuration
+provider "microsoft365" {
+  cloud       = "public"
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+
+  telemetry_optout = true
+}
+```
+
+```hcl Variables
+variable "tenant_id" {
+  description = "Microsoft 365 tenant ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "client_id" {
+  description = "Entra ID application client ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "client_secret" {
+  description = "Entra ID application client secret"
+  type        = string
+  sensitive   = true
+}
+```
+
+```bash Environment Variables
+export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+export M365_CLIENT_ID="11111111-1111-1111-1111-111111111111"
+export M365_CLIENT_SECRET="your-client-secret-here"
+export M365_AUTH_METHOD="client_secret"
+export M365_CLOUD="public"
+```
+
+</CodeGroup>
+
+### Method 2: Client Certificate
+
+<CodeGroup>
+
+```hcl Provider Configuration
+provider "microsoft365" {
+  cloud       = "public"
+  tenant_id   = var.tenant_id
+  auth_method = "client_certificate"
+
+  entra_id_options = {
+    client_id                   = var.client_id
+    client_certificate          = "/path/to/certificate.pfx"
+    client_certificate_password = var.cert_password
+    send_certificate_chain      = false
+  }
+}
+```
+
+```bash Environment Variables
+export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+export M365_CLIENT_ID="11111111-1111-1111-1111-111111111111"
+export M365_CLIENT_CERTIFICATE_FILE_PATH="/path/to/certificate.pfx"
+export M365_CLIENT_CERTIFICATE_PASSWORD="your-cert-password"
+export M365_AUTH_METHOD="client_certificate"
+```
+
+</CodeGroup>
+
+### Method 3: Managed Identity (for Azure VMs)
+
+```hcl
+provider "microsoft365" {
+  cloud       = "public"
+  tenant_id   = var.tenant_id
+  auth_method = "managed_identity"
+
+  entra_id_options = {
+    # Optional: Specify a user-assigned managed identity
+    managed_identity_id = var.managed_identity_id
+  }
+}
+```
+
+### Method 4: Azure Developer CLI
+
+Ideal for local development:
+
+```hcl
+provider "microsoft365" {
+  cloud       = "public"
+  tenant_id   = var.tenant_id
+  auth_method = "azure_developer_cli"
+}
+```
+
+First authenticate with:
+
+```bash
+azd auth login
+```
+
+### Method 5: GitHub Actions OIDC
+
+For CI/CD pipelines:
+
+```hcl
+provider "microsoft365" {
+  cloud       = "public"
+  tenant_id   = var.tenant_id
+  auth_method = "oidc_github"
+
+  entra_id_options = {
+    client_id = var.client_id
+  }
+}
+```
+
+<Accordion title="View all 11 authentication methods">
+
+The provider supports these authentication methods:
+
+1. **azure_developer_cli** - Uses Azure Developer CLI identity
+2. **azure_cli** - Uses Azure CLI identity
+3. **client_secret** - Client ID and secret
+4. **client_certificate** - Client certificate (.pfx)
+5. **device_code** - Device code flow (interactive)
+6. **interactive_browser** - Opens browser for login
+7. **managed_identity** - Azure managed identity
+8. **workload_identity** - Kubernetes workload identity
+9. **oidc** - Generic OpenID Connect
+10. **oidc_github** - GitHub Actions OIDC
+11. **oidc_azure_devops** - Azure DevOps OIDC
+
+See the [Terraform Registry documentation](https://registry.terraform.io/providers/deploymenttheory/microsoft365/latest/docs) for detailed configuration of each method.
+
+</Accordion>
+
+## Environment variables reference
+
+All provider configuration can be set via environment variables:
+
+| Environment Variable | Description | Example |
+|---------------------|-------------|----------|
+| `M365_TENANT_ID` | Microsoft 365 tenant ID | `00000000-0000-0000-0000-000000000000` |
+| `M365_CLIENT_ID` | Application (client) ID | `11111111-1111-1111-1111-111111111111` |
+| `M365_CLIENT_SECRET` | Client secret value | `your-secret-value` |
+| `M365_AUTH_METHOD` | Authentication method | `client_secret`, `client_certificate`, etc. |
+| `M365_CLOUD` | Cloud environment | `public`, `gcc`, `gcchigh`, `dod`, `china` |
+| `M365_CLIENT_CERTIFICATE_FILE_PATH` | Path to certificate file | `/path/to/cert.pfx` |
+| `M365_CLIENT_CERTIFICATE_PASSWORD` | Certificate password | `cert-password` |
+| `M365_TELEMETRY_OPTOUT` | Disable telemetry | `true` or `false` |
+| `M365_DEBUG_MODE` | Enable debug logging | `true` or `false` |
+| `M365_USE_PROXY` | Enable HTTP proxy | `true` or `false` |
+| `M365_PROXY_URL` | Proxy server URL | `http://proxy.example.com:8080` |
+
+<Info>
+Environment variables override values set in the provider configuration block.
+</Info>
+
+## Advanced configuration
+
+### Client options
+
+Configure HTTP client behavior:
+
+```hcl
+provider "microsoft365" {
+  # ... authentication config ...
+
+  client_options = {
+    enable_retry       = true
+    max_retries        = 3
+    retry_delay_seconds = 5
+    
+    enable_redirect    = true
+    max_redirects      = 5
+    
+    enable_compression = true
+    timeout_seconds    = 300
+    
+    custom_user_agent  = "MyTerraform/1.0"
+  }
+}
+```
+
+### Proxy configuration
+
+For environments requiring HTTP proxy:
+
+```hcl
+provider "microsoft365" {
+  # ... authentication config ...
+
+  client_options = {
+    use_proxy      = true
+    proxy_url      = "http://proxy.example.com:8080"
+    proxy_username = var.proxy_username
+    proxy_password = var.proxy_password
+  }
+}
+```
+
+### Multi-cloud support
+
+For US Government or other clouds:
+
+```hcl
+provider "microsoft365" {
+  cloud     = "gcchigh"  # US Government High
+  tenant_id = var.tenant_id
+  # ... rest of config ...
+}
+```
+
+Supported cloud values:
+- `public` - Microsoft Azure Public Cloud (default)
+- `gcc` - US Government Cloud
+- `gcchigh` - US Government High Cloud
+- `dod` - US Department of Defense Cloud
+- `china` - Microsoft Cloud China
+- `ex` - EagleX Cloud
+- `rx` - Secure Cloud (RX)
+
+## Troubleshooting
+
+### Provider not found
+
+If you see "provider not found" errors:
+
+1. Verify the source is `deploymenttheory/microsoft365`
+2. Run `terraform init` to download the provider
+3. Check the version constraint is valid
+
+### Authentication failures
+
+**Error: Invalid client secret**
+
+- Verify the client secret value is correct
+- Check if the secret has expired
+- Create a new secret if needed
+
+**Error: Insufficient privileges**
+
+- Verify API permissions are granted
+- Ensure admin consent has been granted
+- Check the application has the required roles
+
+### Permission errors
+
+**Error: Forbidden (403)**
+
+- The application lacks required API permissions
+- Add the necessary permissions and grant admin consent
+- Wait a few minutes for permission changes to propagate
+
+### Enable debug logging
+
+For detailed troubleshooting:
+
+```hcl
+provider "microsoft365" {
+  # ... other config ...
+  debug_mode = true
+}
+```
+
+Or via environment variable:
+
+```bash
+export M365_DEBUG_MODE=true
+```
+
+## Security best practices
+
+<Warning>
+**Never commit secrets to version control**
+
+Always use one of these methods for secrets:
+- Environment variables
+- Terraform variables with `.tfvars` (add to `.gitignore`)
+- Secret management tools (HashiCorp Vault, Azure Key Vault, etc.)
+- CI/CD secret stores (GitHub Secrets, Azure DevOps Variables, etc.)
+</Warning>
+
+### Recommended security measures
+
+1. **Use certificate-based authentication** instead of client secrets for production
+2. **Rotate secrets regularly** - Set short expiration periods and automate rotation
+3. **Grant least privilege** - Only assign required API permissions
+4. **Use managed identity** when running on Azure infrastructure
+5. **Enable debug mode only for troubleshooting** - It logs sensitive information
+6. **Monitor application usage** - Review sign-in logs in Entra ID
+
+### Secret rotation
+
+Plan for credential rotation:
+
+```bash
+# Create a second secret before the first expires
+az ad app credential reset --id <app-id> --append
+
+# Update your Terraform configuration with the new secret
+# After validating, delete the old secret
+az ad app credential delete --id <app-id> --key-id <old-key-id>
+```
+
+## Next steps
+
+<Steps>
+  <Step title="Test your configuration">
+    Run `terraform plan` to verify authentication works
+  </Step>
+  
+  <Step title="Try the quick start">
+    Deploy your first resources with the [Quick start guide](/quickstart)
+  </Step>
+  
+  <Step title="Explore resources">
+    Browse available resources in the [Terraform Registry](https://registry.terraform.io/providers/deploymenttheory/microsoft365/latest/docs)
+  </Step>
+</Steps>
+
+## Get help
+
+<CardGroup cols={2}>
+  <Card title="Discord community" icon="discord" href="https://discord.gg/Uq8zG6g7WE">
+    Ask questions and get help from other users
+  </Card>
+  
+  <Card title="GitHub issues" icon="github" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/issues">
+    Report bugs or request features
+  </Card>
+</CardGroup>

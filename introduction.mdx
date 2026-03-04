@@ -1,0 +1,155 @@
+---
+title: Introduction
+description: Get started with the Microsoft 365 Terraform Provider to manage your Microsoft 365 environment as code
+---
+
+The Community Terraform Provider for Microsoft 365 empowers workplace teams and administrators to manage their Microsoft 365 environments using Infrastructure as Code (IaC) principles. This provider bridges the gap between Terraform's powerful resource management capabilities and the extensive features of Microsoft 365.
+
+<Warning>
+This provider is currently in **experimental status**. It is NOT intended for production use and may contain bugs, incomplete features, or other issues. Use at your own risk, as it may undergo significant changes without notice until it reaches general availability.
+</Warning>
+
+<Note>
+This is a community-driven project and is not officially supported by Microsoft. For help, questions, or to connect with other users and contributors, join the community [Discord server](https://discord.gg/Uq8zG6g7WE).
+</Note>
+
+## What you can manage
+
+The provider supports management of resources across multiple Microsoft cloud services:
+
+- **Microsoft Intune** - Device and app management, compliance policies, configuration profiles
+- **Microsoft Entra ID** (formerly Azure AD) - Users, groups, conditional access policies, authentication methods
+- **Microsoft 365** - Tenant-wide settings, app installation options, admin configurations
+- **Microsoft Teams** - Teams policies, calling policies, meeting configurations
+- **Microsoft Defender** - Security policies and configurations
+- **Windows 365** - Cloud PC provisioning, user settings, device images, network connections
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Wide resource coverage" icon="layer-group">
+    Manage users, groups, devices, policies, and administrative resources across Microsoft services
+  </Card>
+  
+  <Card title="Multi-cloud compatible" icon="cloud">
+    Works with Microsoft public cloud, US Government (GCC, GCC High, DoD), China, and other national clouds
+  </Card>
+  
+  <Card title="Flexible authentication" icon="key">
+    Supports 11 authentication methods including client secret, certificate, managed identity, OIDC, and more
+  </Card>
+  
+  <Card title="Microsoft Graph SDK" icon="code">
+    Built on Kiota-generated Graph SDKs for strongly-typed development and support for v1.0 and beta endpoints
+  </Card>
+</CardGroup>
+
+## Use cases
+
+### Infrastructure as code for Microsoft 365
+
+Manage Microsoft 365 configuration (users, groups, policies, device management, and more) as code, enabling version control, peer review, and repeatable deployments—just as you would for cloud infrastructure in Azure or GCP.
+
+### Automated, auditable change management
+
+Use Terraform's plan and apply in GitOps workflows to preview, approve, and track changes to your Microsoft 365 environment, ensuring all modifications are intentional, reviewed, and logged.
+
+### Environment replication and drift detection
+
+Reproduce Microsoft 365 tenant configurations across multiple environments (development, staging, production) or tenants, and detect configuration drift over time using Terraform's state management.
+
+### Disaster recovery and rapid rebuilds
+
+Store your Microsoft 365 configuration in code, allowing for rapid recovery or migration of tenant settings, policies, and assignments in the event of accidental changes or tenant loss.
+
+### Bulk and consistent policy enforcement
+
+Apply security, compliance, and device management policies at scale, ensuring consistency and reducing manual configuration errors across large organizations or multiple tenants.
+
+### Self-service via Terraform modules
+
+Build reusable Terraform modules for common Microsoft 365 workloads, enabling service-owning teams to provide self-service provisioning to other engineering teams while maintaining standards.
+
+### Integration with policy-as-code
+
+Integrate with Open Policy Agent (OPA) or Conftest to enforce organizational standards, compliance, and guardrails on Microsoft 365 resources before deployment.
+
+## Requirements
+
+Before you begin, ensure you have:
+
+- **Terraform** >= 1.14.x installed
+- A **Microsoft 365 tenant** with appropriate licenses
+- An **Entra ID application registration** with the necessary API permissions
+- Administrative access to configure authentication
+
+For detailed setup instructions, see the [Installation guide](/installation).
+
+## Supported cloud environments
+
+The provider works with multiple Microsoft cloud environments:
+
+| Environment | Cloud Value | Description |
+|-------------|-------------|-------------|
+| Public Cloud | `public` | Microsoft Azure Public Cloud (default) |
+| US Government | `gcc` | US Government Cloud |
+| US Government High | `gcchigh` | US Government High Cloud |
+| US Department of Defense | `dod` | US DoD Cloud |
+| China Cloud | `china` | Microsoft Cloud China (operated by 21Vianet) |
+| EagleX Cloud | `ex` | EagleX Cloud environment |
+| Secure Cloud | `rx` | Secure Cloud (RX) environment |
+
+## Example resources
+
+Here are some of the resources you can manage with this provider:
+
+- `microsoft365_graph_beta_users_user` - Create and manage user accounts
+- `microsoft365_graph_beta_groups_group` - Manage security and Microsoft 365 groups
+- `microsoft365_graph_beta_identity_and_access_conditional_access_policy` - Configure conditional access policies
+- `microsoft365_graph_beta_groups_group_member_assignment` - Assign users to groups
+- `microsoft365_graph_beta_device_management_windows_update_ring` - Manage Windows update policies
+- `microsoft365_graph_beta_windows_365_cloud_pc_provisioning_policy` - Configure Cloud PC provisioning
+
+For a complete list of resources, see the [Terraform Registry documentation](https://registry.terraform.io/providers/deploymenttheory/microsoft365/latest/docs).
+
+## Getting help
+
+<CardGroup cols={3}>
+  <Card title="Quick start guide" icon="rocket" href="/quickstart">
+    Get up and running in minutes
+  </Card>
+  
+  <Card title="Discord community" icon="discord" href="https://discord.gg/Uq8zG6g7WE">
+    Ask questions and connect with other users
+  </Card>
+  
+  <Card title="GitHub issues" icon="github" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/issues">
+    Report bugs and request features
+  </Card>
+</CardGroup>
+
+## Important disclaimers
+
+<Warning>
+While every effort is made to maintain accuracy and reliability, you should thoroughly test configurations in non-production environments before deploying to production. Always refer to official Microsoft documentation for the most up-to-date information on Microsoft 365 services and features.
+</Warning>
+
+### Data collection and telemetry
+
+The provider may collect information about your use of the software and send it to Microsoft. You can opt out of telemetry by setting `telemetry_optout = true` in your provider configuration or using the `M365_TELEMETRY_OPTOUT` environment variable. See Microsoft's [privacy statement](https://go.microsoft.com/fwlink/?LinkID=824704) for more information.
+
+## Next steps
+
+<Steps>
+  <Step title="Install the provider">
+    Follow the [Installation guide](/installation) to add the provider to your Terraform configuration
+  </Step>
+  
+  <Step title="Configure authentication">
+    Set up one of the 11 supported authentication methods for your environment
+  </Step>
+  
+  <Step title="Try the quick start">
+    Deploy your first Microsoft 365 resources using the [Quick start guide](/quickstart)
+  </Step>
+</Steps>

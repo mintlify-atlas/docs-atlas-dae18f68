@@ -1,0 +1,631 @@
+---
+title: Resource Management
+description: Understanding CRUD operations, import, and lifecycle management for Microsoft 365 resources in Terraform
+---
+
+This guide explains how Terraform manages Microsoft 365 resources throughout their lifecycle, including creation, reading, updating, deletion, and import operations.
+
+## Resource Lifecycle Overview
+
+Terraform manages Microsoft 365 resources through five core operations:
+
+<Steps>
+  <Step title="Create">
+    Creates new resources in your Microsoft 365 tenant when they don't exist in state
+  </Step>
+  <Step title="Read">
+    Retrieves current resource state from Microsoft 365 to detect drift
+  </Step>
+  <Step title="Update">
+    Modifies existing resources when configuration changes are detected
+  </Step>
+  <Step title="Delete">
+    Removes resources from Microsoft 365 when removed from configuration
+  </Step>
+  <Step title="Import">
+    Brings existing Microsoft 365 resources under Terraform management
+  </Step>
+</Steps>
+
+## CRUD Operations
+
+### Create Operation
+
+When you run `terraform apply` with a new resource, Terraform creates it in Microsoft 365 using the Microsoft Graph API.
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "engineering" {
+  display_name     = "Engineering Team"
+  mail_nickname    = "engineering-team"
+  description      = "Security group for engineering team members"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+```
+
+**Behind the scenes:**
+
+1. Provider constructs the Microsoft Graph API request body
+2. Issues `POST /groups` to create the group
+3. Waits for eventual consistency (typically 25 seconds)
+4. Reads the resource back to populate state with all attributes
+5. Stores the resource ID and all computed values in state
+
+<Note>
+Many Microsoft 365 resources require eventual consistency delays after creation. The provider automatically handles these delays to ensure reliable state management.
+</Note>
+
+### Read Operation
+
+Terraform reads resources during `terraform plan` and `terraform refresh` to detect configuration drift.
+
+**When reads occur:**
+- During `terraform plan` to detect changes
+- During `terraform apply` to verify current state
+- After create/update operations to refresh state
+- During `terraform refresh` for explicit state synchronization
+
+**Example read behavior:**
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_win32_app" "vscode" {
+  display_name = "Visual Studio Code"
+  # ... other configuration ...
+}
+```
+
+The provider issues `GET /deviceAppManagement/mobileApps/{id}` and compares the response with the configuration to detect drift.
+
+<Accordion title="Understanding API expansion">
+Many resources use `$expand=*` query parameters to retrieve related objects in a single API call. For example, application resources expand owners, while app configuration policies expand settings.
+
+This optimization reduces API calls and improves performance but may retrieve more data than strictly necessary.
+</Accordion>
+
+### Update Operation
+
+When configuration changes are detected, Terraform updates the resource using `PATCH` requests.
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "engineering" {
+  display_name     = "Engineering Team (Updated)"  # Changed
+  mail_nickname    = "engineering-team"
+  description      = "Updated description"          # Changed
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+```
+
+**Update flow:**
+
+1. Terraform detects changes during plan phase
+2. Issues `PATCH /groups/{id}` with only changed attributes
+3. Waits for eventual consistency if needed
+4. Reads resource back to update state
+
+<Warning>
+Some attributes are **immutable** and cannot be changed after creation. Attempting to change these attributes forces resource replacement (destroy + recreate). Check the resource documentation for immutable attributes.
+</Warning>
+
+**Common immutable attributes:**
+- User Principal Names (for users)
+- Group types (cannot change security group to Microsoft 365 group)
+- Application identifiers
+- Certain Intune app configurations
+
+### Delete Operation
+
+When a resource is removed from configuration, Terraform deletes it from Microsoft 365.
+
+```hcl
+# Resource removed from configuration
+# resource "microsoft365_graph_beta_groups_group" "engineering" { ... }
+```
+
+Running `terraform apply` will delete the group.
+
+**Delete behavior:**
+
+1. Provider issues `DELETE /groups/{id}` request
+2. Resource is removed or soft-deleted depending on the resource type
+3. State is updated to remove the resource
+
+<Accordion title="Soft delete vs hard delete">
+Many Microsoft 365 resources support **soft delete**, where deleted items are retained for 30 days and can be restored:
+
+- **Users**: Soft-deleted by default, can be recovered within 30 days
+- **Groups**: Soft-deleted by default (Microsoft 365 groups), security groups are hard-deleted
+- **Applications**: Soft-deleted by default, can be recovered
+
+For users, you can control this behavior:
+
+```hcl
+resource "microsoft365_graph_beta_users_user" "john_doe" {
+  # ... other configuration ...
+  hard_delete = true  # Permanently delete immediately
+}
+```
+
+Without `hard_delete = true`, users are soft-deleted and can be recovered from the Entra ID admin center.
+</Accordion>
+
+## Import Operation
+
+Importing brings existing Microsoft 365 resources under Terraform management without recreating them.
+
+### Basic Import
+
+Import a resource using its ID:
+
+```bash
+terraform import microsoft365_graph_beta_groups_group.engineering \
+  12345678-1234-1234-1234-123456789abc
+```
+
+**Import steps:**
+
+<Steps>
+  <Step title="Add resource block">
+    Create an empty resource block in your configuration:
+    
+    ```hcl
+    resource "microsoft365_graph_beta_groups_group" "engineering" {
+      # Configuration will be populated after import
+    }
+    ```
+  </Step>
+  <Step title="Run import command">
+    Execute the terraform import command with the resource ID
+  </Step>
+  <Step title="Retrieve state">
+    Provider reads the resource from Microsoft 365 and populates state
+  </Step>
+  <Step title="Update configuration">
+    Run `terraform plan` to see what configuration needs to be added to match state
+  </Step>
+  <Step title="Add missing attributes">
+    Update your configuration to match the imported state
+  </Step>
+  <Step title="Verify">
+    Run `terraform plan` again to verify no changes are detected
+  </Step>
+</Steps>
+
+### Finding Resource IDs
+
+Different resource types require different ID formats:
+
+**Groups, users, applications:**
+```bash
+# From Azure portal - copy the Object ID
+# From Graph API:
+curl -H "Authorization: Bearer $TOKEN" \
+  https://graph.microsoft.com/beta/groups?$filter=displayName eq 'Engineering Team'
+```
+
+**Intune resources:**
+```bash
+# From Intune admin center - view resource properties
+# From Graph API:
+curl -H "Authorization: Bearer $TOKEN" \
+  https://graph.microsoft.com/beta/deviceAppManagement/mobileApps
+```
+
+**Conditional access policies:**
+```bash
+# From Entra admin center - view policy details
+# From Graph API:
+curl -H "Authorization: Bearer $TOKEN" \
+  https://graph.microsoft.com/beta/identity/conditionalAccess/policies
+```
+
+### Import Examples
+
+<Accordion title="Import a Microsoft 365 group">
+```bash
+# Find the group ID
+az ad group show --group "Marketing Team" --query id -o tsv
+
+# Add resource block to configuration
+cat >> main.tf <<EOF
+resource "microsoft365_graph_beta_groups_group" "marketing" {
+  # Will be populated from import
+}
+EOF
+
+# Import the group
+terraform import microsoft365_graph_beta_groups_group.marketing \
+  98765432-9876-9876-9876-987654321abc
+
+# View what needs to be configured
+terraform plan
+
+# Update configuration to match state
+cat >> main.tf <<EOF
+resource "microsoft365_graph_beta_groups_group" "marketing" {
+  display_name     = "Marketing Team"
+  mail_nickname    = "marketing-team"
+  description      = "Marketing department group"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+EOF
+
+# Verify no changes needed
+terraform plan
+```
+</Accordion>
+
+<Accordion title="Import a conditional access policy">
+```bash
+# Import the policy
+terraform import microsoft365_graph_beta_identity_and_access_conditional_access_policy.mfa_policy \
+  11111111-2222-3333-4444-555555555555
+
+# Use terraform show to view imported state
+terraform show
+
+# Add configuration matching the imported state
+```
+</Accordion>
+
+<Accordion title="Import an Intune Win32 app">
+```bash
+# Import the Win32 app
+terraform import microsoft365_graph_beta_device_and_app_management_win32_app.chrome \
+  aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+
+# Note: Content files cannot be imported - you must provide setup_file_path
+# in configuration for future updates
+```
+</Accordion>
+
+## Lifecycle Management
+
+### Prevent Destroy
+
+Protect critical resources from accidental deletion:
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "critical_group" {
+  display_name     = "Domain Admins"
+  mail_nickname    = "domain-admins"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+```
+
+Attempting to destroy this resource will result in an error.
+
+### Ignore Changes
+
+Ignore specific attributes that may be modified outside Terraform:
+
+```hcl
+resource "microsoft365_graph_beta_users_user" "service_account" {
+  display_name        = "API Service Account"
+  user_principal_name = "api-svc@contoso.com"
+  account_enabled     = true
+
+  lifecycle {
+    ignore_changes = [
+      password_profile,  # Password may be changed by admins
+      account_enabled,   # Account may be disabled for maintenance
+    ]
+  }
+}
+```
+
+### Replace Triggered By
+
+Replace a resource when a related resource changes:
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "project_team" {
+  display_name     = "Project Alpha Team"
+  mail_nickname    = "project-alpha"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+
+resource "microsoft365_graph_beta_groups_group_member_assignment" "member" {
+  group_id           = microsoft365_graph_beta_groups_group.project_team.id
+  member_id          = microsoft365_graph_beta_users_user.project_lead.id
+  member_object_type = "User"
+
+  lifecycle {
+    replace_triggered_by = [
+      microsoft365_graph_beta_users_user.project_lead.id
+    ]
+  }
+}
+```
+
+### Create Before Destroy
+
+Ensure new resource is created before old one is destroyed:
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "mfa" {
+  display_name = "Require MFA"
+  state        = "enabled"
+  # ... policy configuration ...
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+```
+
+This is useful for policies and configurations where you want to minimize downtime.
+
+## Resource Dependencies
+
+### Implicit Dependencies
+
+Terraform automatically detects dependencies through resource references:
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "security" {
+  display_name     = "Security Team"
+  mail_nickname    = "security-team"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+
+resource "microsoft365_graph_beta_groups_group_member_assignment" "assignment" {
+  group_id           = microsoft365_graph_beta_groups_group.security.id  # Implicit dependency
+  member_id          = microsoft365_graph_beta_users_user.security_lead.id
+  member_object_type = "User"
+}
+```
+
+Terraform ensures the group is created before the member assignment.
+
+### Explicit Dependencies
+
+Use `depends_on` for dependencies not captured by references:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_compliance_policy" "baseline" {
+  display_name = "Security Baseline"
+  # ... configuration ...
+}
+
+resource "microsoft365_graph_beta_device_management_configuration_policy" "settings" {
+  display_name = "Security Settings"
+  # ... configuration ...
+
+  depends_on = [
+    microsoft365_graph_beta_device_management_compliance_policy.baseline
+  ]
+}
+```
+
+## Timeouts
+
+Configure custom timeouts for long-running operations:
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_win32_app" "large_app" {
+  display_name = "Large Enterprise Application"
+  # ... configuration ...
+
+  timeouts {
+    create = "30m"  # Allow 30 minutes for creation (file upload)
+    update = "20m"  # Allow 20 minutes for updates
+    delete = "10m"  # Allow 10 minutes for deletion
+    read   = "5m"   # Allow 5 minutes for read operations
+  }
+}
+```
+
+<Note>
+Default timeouts vary by resource type. Win32 apps and other resources with file uploads typically have longer default timeouts (180 seconds) to accommodate large files.
+</Note>
+
+## Best Practices
+
+### 1. Use Explicit Resource Names
+
+```hcl
+# Good - descriptive resource name
+resource "microsoft365_graph_beta_groups_group" "engineering_team" {
+  display_name = "Engineering Team"
+  # ...
+}
+
+# Avoid - generic names
+resource "microsoft365_graph_beta_groups_group" "group1" {
+  display_name = "Engineering Team"
+  # ...
+}
+```
+
+### 2. Import Existing Resources
+
+Don't recreate resources that already exist - import them:
+
+```bash
+# Import existing resources instead of recreating
+terraform import microsoft365_graph_beta_groups_group.existing_group <group-id>
+```
+
+### 3. Use Variables for IDs
+
+Avoid hardcoding resource IDs:
+
+```hcl
+# Good - reference by attribute
+resource "microsoft365_graph_beta_groups_group_member_assignment" "member" {
+  group_id  = microsoft365_graph_beta_groups_group.engineering.id
+  member_id = microsoft365_graph_beta_users_user.engineer.id
+  # ...
+}
+
+# Avoid - hardcoded IDs
+resource "microsoft365_graph_beta_groups_group_member_assignment" "member" {
+  group_id  = "12345678-1234-1234-1234-123456789abc"
+  member_id = "87654321-4321-4321-4321-abcdefabcdef"
+  # ...
+}
+```
+
+### 4. Plan Before Apply
+
+Always review changes before applying:
+
+```bash
+# Preview changes
+terraform plan -out=tfplan
+
+# Review the plan
+terraform show tfplan
+
+# Apply only after review
+terraform apply tfplan
+```
+
+### 5. Handle Eventual Consistency
+
+Be aware of eventual consistency delays in Microsoft 365:
+
+```hcl
+# Provider handles this automatically, but be aware:
+# - New resources may take 15-30 seconds to become available
+# - Changes may not be immediately visible in all APIs
+# - The provider includes automatic retry logic with backoff
+```
+
+## Common Patterns
+
+### Bulk Resource Creation
+
+```hcl
+locals {
+  departments = ["Engineering", "Marketing", "Sales", "Support"]
+}
+
+resource "microsoft365_graph_beta_groups_group" "department_groups" {
+  for_each = toset(local.departments)
+
+  display_name     = "${each.value} Team"
+  mail_nickname    = lower(replace(each.value, " ", "-"))
+  description      = "Security group for ${each.value} department"
+  security_enabled = true
+  mail_enabled     = false
+  group_types      = []
+}
+```
+
+### Conditional Resources
+
+```hcl
+variable "enable_guest_policy" {
+  type    = bool
+  default = false
+}
+
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "guest_access" {
+  count = var.enable_guest_policy ? 1 : 0
+
+  display_name = "Block Guest Access"
+  state        = "enabled"
+  # ... configuration ...
+}
+```
+
+### Resource Templating
+
+```hcl
+locals {
+  compliance_policies = {
+    windows = {
+      platform = "windows10"
+      settings = { /* ... */ }
+    }
+    macos = {
+      platform = "macOS"
+      settings = { /* ... */ }
+    }
+  }
+}
+
+resource "microsoft365_graph_beta_device_management_compliance_policy" "policies" {
+  for_each = local.compliance_policies
+
+  display_name = "${each.key} Compliance Policy"
+  # ... use each.value.settings ...
+}
+```
+
+## Troubleshooting
+
+### Resource Not Found
+
+**Symptom:** Terraform reports resource doesn't exist during read
+
+**Solutions:**
+- Verify resource ID is correct
+- Check if resource was deleted outside Terraform
+- Ensure you have read permissions for the resource
+- Verify eventual consistency has completed
+
+### Resource Already Exists
+
+**Symptom:** Creation fails because resource already exists
+
+**Solutions:**
+- Import the existing resource instead of creating
+- Check for duplicate resources in configuration
+- Verify resource wasn't created outside Terraform
+
+### Permission Denied
+
+**Symptom:** Operations fail with 403 Forbidden errors
+
+**Solutions:**
+- Verify application has required Microsoft Graph permissions
+- Ensure admin consent has been granted
+- Check if service principal has necessary directory roles
+- Review error message for specific permission required
+
+### Timeout Errors
+
+**Symptom:** Operations fail with timeout errors
+
+**Solutions:**
+- Increase timeout values in resource configuration
+- Check network connectivity to Microsoft Graph
+- Verify Microsoft 365 service health
+- For file uploads, ensure file size is reasonable
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="State Management" icon="database" href="/concepts/state-management">
+    Learn how Terraform state works with Microsoft 365 resources
+  </Card>
+  
+  <Card title="Drift Detection" icon="rotate" href="/concepts/drift-detection">
+    Detect and resolve configuration drift in Microsoft 365 environments
+  </Card>
+  
+  <Card title="Graph API Versions" icon="code-branch" href="/concepts/graph-api-versions">
+    Understand v1.0 vs beta endpoints and when to use each
+  </Card>
+  
+  <Card title="Provider Schema" icon="book" href="/reference/provider-schema">
+    View complete provider and resource schema reference
+  </Card>
+</CardGroup>

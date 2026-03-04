@@ -1,0 +1,539 @@
+---
+title: Progressive rollout strategies
+description: Complete guide for implementing phased deployments and progressive rollouts using the GUID List Sharder utility data source
+---
+
+This guide demonstrates how to implement progressive rollouts, phased deployments, and pilot programs for Microsoft 365 policies using the `microsoft365_utility_guid_list_sharder` data source.
+
+## Overview
+
+The GUID List Sharder data source (`microsoft365_utility_guid_list_sharder`) is a utility tool that queries Microsoft Graph API to retrieve collections of object IDs (GUIDs) for users, devices, or group members, then intelligently distributes them into configurable "shards" (subsets) for progressive deployment strategies.
+
+### What Problem Does This Solve?
+
+When deploying policies, configurations, or security controls across large Microsoft 365 environments, immediate organization-wide rollouts carry significant risk. If a policy misconfiguration or unexpected behavior occurs, it can impact thousands of users or devices simultaneously.
+
+<AccordionGroup>
+  <Accordion title="Enabling Progressive Rollouts">
+    Deploy changes to small pilot groups first (e.g., 10% of users), validate functionality, then gradually expand to broader populations
+  </Accordion>
+  
+  <Accordion title="Reducing Blast Radius">
+    Limit the impact of potential issues by controlling which users/devices receive changes at each phase
+  </Accordion>
+  
+  <Accordion title="Facilitating Validation">
+    Allow time to monitor, test, and validate each phase before proceeding to the next
+  </Accordion>
+  
+  <Accordion title="Distributing Pilot Burden">
+    By using unique seed values across different rollouts, the same users won't always be early adopters. User X might be in the 10% pilot for MFA rollout (seed: "mfa-2024") but in the 60% final wave for Windows Updates (seed: "windows-2024"), preventing "pilot fatigue"
+  </Accordion>
+  
+  <Accordion title="Multiple Deployment Strategies">
+    Choose between hash (deterministic assignment), round-robin (equal distribution), or percentage-based (custom-weighted) distribution. All strategies support optional seed for reproducibility
+  </Accordion>
+</AccordionGroup>
+
+### How It Works
+
+<Steps>
+  <Step title="Query">
+    Retrieves object IDs from Microsoft Graph endpoints (`/users`, `/devices`, `/applications`, `/servicePrincipals`, or `/groups/{id}/members`) with optional OData filtering to narrow the population
+  </Step>
+  
+  <Step title="Shard">
+    Applies one of four distribution strategies:
+    - **Rendezvous**: Highest Random Weight (HRW) algorithm for deterministic assignment
+    - **Round-robin**: Circular distribution for guaranteed equal sizes
+    - **Percentage**: Custom-weighted distribution (e.g., 10% pilot, 30% broader, 60% full)
+    - **Size**: Absolute fixed sizes (e.g., 50 pilot, 200 broader, remainder full)
+  </Step>
+  
+  <Step title="Output">
+    Returns a map of shards containing sets of object IDs, directly compatible with Terraform resources like conditional access policies and groups
+  </Step>
+</Steps>
+
+## Prerequisites
+
+- Terraform 1.14.0 or later
+- Microsoft 365 provider configured with appropriate credentials
+- Required permissions:
+  - `User.Read.All` or `Directory.Read.All` - For users
+  - `Device.Read.All` or `Directory.Read.All` - For devices
+  - `Application.Read.All` or `Directory.Read.All` - For applications/service principals
+  - `Group.Read.All` or `GroupMember.Read.All` - For group members
+
+## Choosing the Right Strategy
+
+Use this decision matrix to select the optimal strategy and seed combination for your use case:
+
+| Your Need | Strategy | Seed | Why |
+|-----------|----------|------|-----|
+| **Same shards everywhere, shard count may change** | `rendezvous` | ✅ Required | HRW algorithm minimizes reassignment when shard count changes |
+| **Different shards per rollout** (avoid pilot fatigue) | `rendezvous` | ✅ Yes | Different seeds distribute pilot burden across different users |
+| **Exact equal sizes** (e.g., 25% in each of 4 groups) | `round-robin` | 🟡 Optional | Round-robin guarantees equal sizes (±1). Add seed for reproducibility |
+| **Custom percentages, one-time split** | `percentage` | ❌ None | Fast, no need for reproducibility |
+| **Custom percentages, reproducible** | `percentage` | ✅ Yes | Seed ensures same users in same phases across runs |
+| **Absolute sizes** (exactly 50 pilot users, 200 broader) | `size` | 🟡 Optional | Fixed capacities regardless of total population |
+| **Capacity testing / A/B testing** | `round-robin` | ✅ Yes | Exact equal sizes + reproducible results |
+
+## Sharding Strategies
+
+### Strategy Comparison
+
+| Strategy | Distribution Method | Seed | Equal Sizes | Custom Sizes | Best For |
+|----------|---------------------|------|-------------|--------------|----------|
+| `rendezvous` | Highest Random Weight | ✅ Required | ~Equal | ❌ No | Deterministic assignment with minimal disruption when adding/removing shards |
+| `round-robin` | Circular order | 🟡 Optional | ✅ Exact | ❌ No | Guaranteed equal distribution |
+| `percentage` | Sequential chunks | 🟡 Optional | ❌ No | ✅ Yes (%) | Custom-weighted phased rollouts |
+| `size` | Absolute sizes | 🟡 Optional | ❌ No | ✅ Yes (fixed) | Fixed capacity constraints |
+
+### Rendezvous Strategy (Highest Random Weight)
+
+Uses the Highest Random Weight (HRW) algorithm for deterministic assignment. Each GUID-shard pair gets a hash weight, and the GUID goes to the shard with highest weight.
+
+**Use When:**
+- You need deterministic assignment based on GUID properties
+- Want reproducible results across Terraform runs
+- May need to add/remove shards later with minimal disruption
+- Need to vary which users are in pilot groups across different rollouts (use different seeds)
+
+```hcl
+# MFA Rollout - User X might be in shard_0 (10% pilot)
+data "microsoft365_utility_guid_list_sharder" "mfa_rollout" {
+  resource_type = "users"
+  odata_filter  = "accountEnabled eq true"
+  shard_count   = 3
+  strategy      = "rendezvous"
+  seed          = "mfa-rollout-2024"  # Unique seed for this rollout
+}
+
+# Windows Updates - Same User X might be in shard_2 (60% final wave)
+data "microsoft365_utility_guid_list_sharder" "windows_updates" {
+  resource_type = "devices"
+  odata_filter  = "operatingSystem eq 'Windows'"
+  shard_count   = 3
+  strategy      = "rendezvous"
+  seed          = "windows-updates-2024"  # Different seed = different distribution
+}
+```
+
+### Round-Robin Strategy
+
+Distributes GUIDs in circular order, one to each shard in sequence.
+
+**Use When:**
+- You need exact equal distribution
+- One-time split (no seed) or reproducible split (with seed)
+- Doing statistical sampling or capacity testing
+
+<CodeGroup>
+```hcl Without Seed (non-deterministic)
+data "microsoft365_utility_guid_list_sharder" "equal_split" {
+  resource_type = "users"
+  shard_count   = 4
+  strategy      = "round-robin"
+  # No seed - uses API order
+}
+```
+
+```hcl With Seed (deterministic)
+data "microsoft365_utility_guid_list_sharder" "ab_test" {
+  resource_type = "users"
+  shard_count   = 2
+  strategy      = "round-robin"
+  seed          = "ab-test-q1-2024"  # Reproducible equal split
+}
+```
+</CodeGroup>
+
+### Percentage Strategy (Custom-Weighted)
+
+Distributes GUIDs according to specified percentages.
+
+**Use When:**
+- Following specific rollout percentages (10% pilot, 30% expansion, 60% full)
+- Implementing Windows Update rings with industry-standard distributions
+- Need reproducible results with custom-sized shards (use seed)
+
+<CodeGroup>
+```hcl Without Seed (non-deterministic)
+data "microsoft365_utility_guid_list_sharder" "phased_rollout" {
+  resource_type     = "users"
+  shard_percentages = [10, 30, 60]
+  strategy          = "percentage"
+  # No seed - uses API order
+}
+```
+
+```hcl With Seed (deterministic)
+data "microsoft365_utility_guid_list_sharder" "mfa_phases" {
+  resource_type     = "users"
+  odata_filter      = "accountEnabled eq true"
+  shard_percentages = [10, 30, 60]
+  strategy          = "percentage"
+  seed              = "mfa-2024"  # Reproducible results
+}
+```
+</CodeGroup>
+
+### Size Strategy (Absolute Counts)
+
+Distributes GUIDs according to specified absolute shard sizes.
+
+**Use When:**
+- Support team can handle exactly N pilot users (e.g., 50 users max)
+- Testing infrastructure has fixed capacity limits
+- Compliance requires specific pilot sizes
+
+```hcl
+data "microsoft365_utility_guid_list_sharder" "capacity_constrained" {
+  resource_type = "users"
+  odata_filter  = "accountEnabled eq true"
+  shard_sizes   = [50, 200, -1]  # 50 pilot, 200 broader, rest full
+  strategy      = "size"
+  seed          = "mfa-2024"  # Optional: add for reproducibility
+}
+```
+
+## Common Patterns
+
+### Pattern 1: MFA Progressive Rollout
+
+Roll out MFA requirements in three phases: pilot, broader pilot, and full deployment.
+
+```hcl
+# Shard users into three groups with unique seed
+data "microsoft365_utility_guid_list_sharder" "mfa_rollout" {
+  resource_type     = "users"
+  odata_filter      = "accountEnabled eq true and userType eq 'Member'"
+  shard_percentages = [10, 30, 60]
+  strategy          = "percentage"
+  seed              = "mfa-rollout-2024"  # Reproducible results
+}
+
+# Phase 1: Pilot (10%)
+resource "microsoft365_graph_beta_conditional_access_policy" "mfa_pilot" {
+  display_name = "MFA Required - Phase 1 Pilot"
+  state        = "enabled"
+  
+  conditions {
+    users {
+      include_users = data.microsoft365_utility_guid_list_sharder.mfa_rollout.shards["shard_0"]
+    }
+    applications {
+      include_applications = ["All"]
+    }
+  }
+  
+  grant_controls {
+    operator          = "OR"
+    built_in_controls = ["mfa"]
+  }
+}
+
+# Phase 2: Broader Pilot (30%)
+resource "microsoft365_graph_beta_conditional_access_policy" "mfa_broader" {
+  display_name = "MFA Required - Phase 2 Broader Pilot"
+  state        = "enabledForReportingButNotEnforced"  # Start in report-only
+  
+  conditions {
+    users {
+      include_users = data.microsoft365_utility_guid_list_sharder.mfa_rollout.shards["shard_1"]
+    }
+    applications {
+      include_applications = ["All"]
+    }
+  }
+  
+  grant_controls {
+    operator          = "OR"
+    built_in_controls = ["mfa"]
+  }
+}
+
+# Monitor pilot sizes
+output "mfa_rollout_distribution" {
+  value = {
+    pilot_count         = length(data.microsoft365_utility_guid_list_sharder.mfa_rollout.shards["shard_0"])
+    broader_pilot_count = length(data.microsoft365_utility_guid_list_sharder.mfa_rollout.shards["shard_1"])
+    full_rollout_count  = length(data.microsoft365_utility_guid_list_sharder.mfa_rollout.shards["shard_2"])
+  }
+}
+```
+
+### Pattern 2: Windows Update Deployment Rings
+
+Implement industry-standard Windows Update rings with 5% early adopters, 15% IT validation, and 80% broad deployment.
+
+```hcl
+# Shard Windows devices into update rings
+data "microsoft365_utility_guid_list_sharder" "update_rings" {
+  resource_type     = "devices"
+  odata_filter      = "operatingSystem eq 'Windows' and accountEnabled eq true"
+  shard_percentages = [5, 15, 80]
+  strategy          = "percentage"
+  seed              = "windows-updates-2024"
+}
+
+# Ring 0: Early Adopters / Canary (5%)
+resource "microsoft365_graph_beta_windows_update_for_business_configuration" "ring_0" {
+  display_name = "Windows Update - Ring 0 (Early Adopters)"
+  
+  quality_update_defer_period_in_days = 0
+  feature_update_defer_period_in_days = 0
+  
+  assignments {
+    target {
+      device_ids = data.microsoft365_utility_guid_list_sharder.update_rings.shards["shard_0"]
+    }
+  }
+}
+
+# Ring 1: IT Pilot / Validation (15%)
+resource "microsoft365_graph_beta_windows_update_for_business_configuration" "ring_1" {
+  display_name = "Windows Update - Ring 1 (IT Validation)"
+  
+  quality_update_defer_period_in_days = 3
+  feature_update_defer_period_in_days = 7
+  
+  assignments {
+    target {
+      device_ids = data.microsoft365_utility_guid_list_sharder.update_rings.shards["shard_1"]
+    }
+  }
+}
+```
+
+### Pattern 3: Group Splitting and Resharding
+
+Split an existing large group into multiple smaller groups for more granular policy targeting.
+
+```hcl
+# Get members from existing large group and split into 3
+data "microsoft365_utility_guid_list_sharder" "split_group" {
+  resource_type = "group_members"
+  group_id      = "12345678-1234-1234-1234-123456789abc"  # Original group ID
+  odata_filter  = "accountEnabled eq true"
+  shard_count   = 3
+  strategy      = "rendezvous"
+  seed          = "sales-team-split-2024"
+}
+
+# Create new pilot groups
+resource "microsoft365_graph_beta_group" "pilot_group_a" {
+  display_name     = "Sales Team - Pilot Group A"
+  mail_nickname    = "sales-pilot-a"
+  security_enabled = true
+  
+  group_members = data.microsoft365_utility_guid_list_sharder.split_group.shards["shard_0"]
+}
+```
+
+### Pattern 4: A/B Testing
+
+Distribute users equally across multiple test groups for policy or feature testing.
+
+```hcl
+# Equal distribution for testing
+data "microsoft365_utility_guid_list_sharder" "ab_test" {
+  resource_type = "users"
+  odata_filter  = "department eq 'Engineering'"
+  shard_count   = 3
+  strategy      = "round-robin"
+  seed          = "engineering-ab-test-2024"
+}
+
+# Apply different policies to each test group
+resource "microsoft365_graph_beta_conditional_access_policy" "test_group_a" {
+  display_name = "Test Policy - Group A (Control)"
+  state        = "enabled"
+  
+  conditions {
+    users {
+      include_users = data.microsoft365_utility_guid_list_sharder.ab_test.shards["shard_0"]
+    }
+  }
+  # ... control policy settings
+}
+```
+
+## Seed Usage Patterns
+
+### Pattern: Unique Seed Per Rollout (Distribute Pilot Burden)
+
+**Use When:**
+- Running multiple independent rollouts (MFA, Windows Updates, CA policies, etc.)
+- Want to avoid same users always being in pilot groups
+- Each rollout should have different distribution of who's in which phase
+
+```hcl
+# Each rollout gets unique seed - using rendezvous for deterministic distribution
+data "microsoft365_utility_guid_list_sharder" "mfa" {
+  resource_type = "users"
+  shard_count   = 10
+  strategy      = "rendezvous"
+  seed          = "mfa-rollout-2024"  # User X → shard_0 (10% pilot)
+}
+
+data "microsoft365_utility_guid_list_sharder" "windows" {
+  resource_type = "devices"
+  shard_count   = 10
+  strategy      = "rendezvous"
+  seed          = "windows-updates-2024"  # User X → shard_8 (80% wave)
+}
+
+data "microsoft365_utility_guid_list_sharder" "ca" {
+  resource_type = "users"
+  shard_count   = 10
+  strategy      = "rendezvous"
+  seed          = "ca-policies-2024"  # User X → shard_3 (30% wave)
+}
+```
+
+<Note>
+**Result**: User X experiences different phases across rollouts, preventing pilot fatigue.
+</Note>
+
+### Anti-Patterns (Avoid These)
+
+<Warning>
+**Using same seed for unrelated rollouts**
+
+```hcl
+# BAD: Same seed defeats the purpose of distributing pilot burden
+data "microsoft365_utility_guid_list_sharder" "mfa" {
+  seed = "2024"  # Too generic
+}
+
+data "microsoft365_utility_guid_list_sharder" "windows" {
+  seed = "2024"  # Same users in pilot for both!
+}
+```
+
+✅ **Better: Unique seeds per rollout**
+
+```hcl
+data "microsoft365_utility_guid_list_sharder" "mfa" {
+  seed = "mfa-2024"  # Specific
+}
+
+data "microsoft365_utility_guid_list_sharder" "windows" {
+  seed = "windows-2024"  # Different distribution
+}
+```
+</Warning>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start Small">
+    Begin with conservative pilot sizes (5-10%) to minimize impact if issues arise.
+    
+    ```hcl
+    shard_percentages = [5, 15, 80]  # Start with 5% pilot
+    ```
+  </Accordion>
+  
+  <Accordion title="Use OData Filters">
+    Exclude disabled accounts and filter by relevant attributes to ensure clean populations.
+    
+    ```hcl
+    # Good practice
+    odata_filter = "accountEnabled eq true and userType eq 'Member'"
+    
+    # For devices
+    odata_filter = "operatingSystem eq 'Windows' and accountEnabled eq true"
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Unique Seeds to Distribute Pilot Burden">
+    Different rollouts should use different seeds to prevent the same users from always being in pilot groups.
+    
+    ```hcl
+    # MFA Rollout - User X might be in 10% pilot
+    seed = "mfa-rollout-2024"
+    
+    # Windows Updates - Same User X might be in 80% final wave
+    seed = "windows-updates-2024"
+    ```
+  </Accordion>
+  
+  <Accordion title="Monitor Shard Sizes">
+    Output shard sizes to verify distribution matches expectations.
+    
+    ```hcl
+    output "rollout_distribution" {
+      value = {
+        pilot_count = length(data.microsoft365_utility_guid_list_sharder.example.shards["shard_0"])
+        main_count  = length(data.microsoft365_utility_guid_list_sharder.example.shards["shard_1"])
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Report-Only Mode">
+    Start policies in report-only mode before enforcement.
+    
+    ```hcl
+    resource "microsoft365_graph_beta_conditional_access_policy" "pilot" {
+      state = "enabledForReportingButNotEnforced"  # Report-only initially
+      # ... later change to "enabled"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Shard sizes don't match percentages exactly">
+    **Cause**: Percentages are calculated from the total population, and rounding occurs for decimal values.
+    
+    **Solution**: This is expected behavior. The last shard receives all remaining GUIDs to ensure nothing is lost.
+  </Accordion>
+  
+  <Accordion title="Users moving between shards on re-run">
+    **Cause**: Using `round-robin`, `percentage`, or `size` strategy without a seed.
+    
+    **Solution**: Add a seed to make the strategy deterministic:
+    
+    ```hcl
+    strategy = "round-robin"
+    seed     = "my-rollout-2024"  # Makes results reproducible
+    ```
+  </Accordion>
+  
+  <Accordion title="Empty shards or API errors">
+    **Cause**: OData filter too restrictive or no results found.
+    
+    **Solution**: Test your OData filter independently:
+    
+    ```bash
+    # Test filter in Graph Explorer
+    GET https://graph.microsoft.com/beta/users?$filter=accountEnabled eq true
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Microsoft Graph API - Users" icon="users" href="https://learn.microsoft.com/en-us/graph/api/user-list">
+    List users endpoint documentation
+  </Card>
+  
+  <Card title="Microsoft Graph API - Devices" icon="laptop" href="https://learn.microsoft.com/en-us/graph/api/device-list">
+    List devices endpoint documentation
+  </Card>
+  
+  <Card title="Batch import" icon="download">
+    Discover and import existing M365 resources
+  </Card>
+  
+  <Card title="Workspace design" icon="diagram-project">
+    Learn about workspace design patterns
+  </Card>
+</CardGroup>

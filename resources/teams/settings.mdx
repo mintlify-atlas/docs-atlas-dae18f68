@@ -1,0 +1,86 @@
+---
+title: Teams Settings
+description: Configure Microsoft Teams policies and settings
+---
+
+## Available Resources
+
+<CardGroup cols={2}>
+  <Card title="Calling Policy" icon="phone">
+    **Resource**: `microsoft365_powershell_microsoft_teams_teams_calling_policy`
+    
+    Configure calling features and restrictions.
+  </Card>
+  
+  <Card title="Meeting Policy" icon="video">
+    **Resource**: `microsoft365_powershell_microsoft_teams_teams_meeting_policy`
+    
+    Control meeting features and capabilities.
+  </Card>
+</CardGroup>
+
+## Teams Calling Policy
+
+```hcl
+resource "microsoft365_powershell_microsoft_teams_teams_calling_policy" "standard" {
+  identity = "StandardCalling"
+  
+  # Configure calling features
+  # Refer to Microsoft Teams documentation for available settings
+}
+```
+
+## Teams Meeting Policy
+
+```hcl
+resource "microsoft365_powershell_microsoft_teams_teams_meeting_policy" "standard" {
+  identity = "StandardMeetings"
+  
+  # Configure meeting features
+  # Refer to Microsoft Teams documentation for available settings
+}
+```
+
+## Organization-Wide Settings
+
+Configure global Teams settings:
+
+```hcl
+resource "microsoft365_powershell_microsoft_teams_teams_org_wide_teams_settings" "org_settings" {
+  # Organization-wide Teams configuration
+}
+```
+
+## Policy Assignment
+
+Assign policies to users or groups based on your organizational requirements.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Create role-based policies">
+    Define different policies for different user groups (executives, standard users, external users).
+  </Accordion>
+
+  <Accordion title="Test policies with pilot groups">
+    Deploy new policies to pilot groups before organization-wide rollout.
+  </Accordion>
+
+  <Accordion title="Document policy purposes">
+    Maintain clear documentation of why each policy exists and what it controls.
+  </Accordion>
+
+  <Accordion title="Review policies regularly">
+    Periodically review and update policies as organizational needs change.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Teams](/resources/teams/teams)
+- [Channels](/resources/teams/channels)
+- [Groups](/resources/groups-users/groups)
+
+<Note>
+  Teams PowerShell resources require the Teams PowerShell module to be configured with the provider.
+</Note>

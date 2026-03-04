@@ -1,0 +1,282 @@
+---
+title: Cloud Environments
+description: Configure the Microsoft 365 provider for different cloud environments
+---
+
+The Microsoft 365 provider supports multiple cloud environments, each with different endpoints for authentication and Microsoft Graph API access.
+
+## Supported Cloud Environments
+
+The provider supports the following cloud environments via the `cloud` parameter:
+
+<CardGroup cols={2}>
+  <Card title="Public Cloud" icon="globe">
+    Microsoft Azure Public Cloud (default)
+    
+    Value: `public`
+  </Card>
+  
+  <Card title="US Government Cloud" icon="building-flag">
+    US Government Cloud (GCC)
+    
+    Value: `gcc`
+  </Card>
+  
+  <Card title="US Government High" icon="shield">
+    US Government High Cloud (GCC High)
+    
+    Value: `gcchigh`
+  </Card>
+  
+  <Card title="US DoD Cloud" icon="shield-halved">
+    US Department of Defense Cloud
+    
+    Value: `dod`
+  </Card>
+  
+  <Card title="China Cloud" icon="earth-asia">
+    Microsoft Cloud China (operated by 21Vianet)
+    
+    Value: `china`
+  </Card>
+  
+  <Card title="EagleX Cloud" icon="shield-check">
+    EagleX Cloud Environment
+    
+    Value: `ex`
+  </Card>
+  
+  <Card title="Secure Cloud (RX)" icon="lock">
+    Secure Cloud Environment
+    
+    Value: `rx`
+  </Card>
+</CardGroup>
+
+## Configuration
+
+Set the cloud environment using the `cloud` parameter:
+
+```hcl
+provider "microsoft365" {
+  cloud       = "public"
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+}
+```
+
+Or using an environment variable:
+
+```bash
+export M365_CLOUD="public"
+```
+
+## Cloud-Specific Details
+
+### Public Cloud (public)
+
+**Default environment** for most Microsoft 365 customers.
+
+**Endpoints:**
+- OAuth Authority: `https://login.microsoftonline.com/`
+- Graph API: `https://graph.microsoft.com/v1.0`
+- Graph Beta API: `https://graph.microsoft.com/beta`
+
+**Configuration:**
+```hcl
+provider "microsoft365" {
+  cloud = "public"
+  # ... other configuration
+}
+```
+
+### US Government Cloud (gcc)
+
+**For US Government Community Cloud** customers.
+
+**Endpoints:**
+- OAuth Authority: `https://login.microsoftonline.us/`
+- Graph API: `https://graph.microsoft.us/v1.0`
+- Graph Beta API: `https://graph.microsoft.us/beta`
+
+**Configuration:**
+```hcl
+provider "microsoft365" {
+  cloud = "gcc"
+  # ... other configuration
+}
+```
+
+### US Government High Cloud (gcchigh)
+
+**For US Government Community Cloud High** (GCC High) customers with enhanced compliance requirements.
+
+**Endpoints:**
+- OAuth Authority: `https://login.microsoftonline.us/`
+- Graph API: `https://graph.microsoft.us/v1.0`
+- Graph Beta API: `https://graph.microsoft.us/beta`
+
+**Configuration:**
+```hcl
+provider "microsoft365" {
+  cloud = "gcchigh"
+  # ... other configuration
+}
+```
+
+### US Department of Defense Cloud (dod)
+
+**For US Department of Defense** customers with the highest compliance and security requirements.
+
+**Endpoints:**
+- OAuth Authority: `https://login.microsoftonline.us/`
+- Graph API: `https://dod-graph.microsoft.us/v1.0`
+- Graph Beta API: `https://dod-graph.microsoft.us/beta`
+
+**Configuration:**
+```hcl
+provider "microsoft365" {
+  cloud = "dod"
+  # ... other configuration
+}
+```
+
+### China Cloud (china)
+
+**For Microsoft Cloud China** operated by 21Vianet.
+
+**Endpoints:**
+- OAuth Authority: `https://login.chinacloudapi.cn/`
+- Graph API: `https://microsoftgraph.chinacloudapi.cn/v1.0`
+- Graph Beta API: `https://microsoftgraph.chinacloudapi.cn/beta`
+
+**Configuration:**
+```hcl
+provider "microsoft365" {
+  cloud = "china"
+  # ... other configuration
+}
+```
+
+<Note>
+Microsoft Cloud China is operated by 21Vianet and is physically separated from Microsoft's global cloud infrastructure. You'll need separate credentials and tenant IDs for this environment.
+</Note>
+
+### EagleX Cloud (ex)
+
+**For EagleX Cloud Environment** customers.
+
+**Configuration:**
+```hcl
+provider "microsoft365" {
+  cloud = "ex"
+  # ... other configuration
+}
+```
+
+### Secure Cloud (rx)
+
+**For Secure Cloud (RX) Environment** customers.
+
+**Configuration:**
+```hcl
+provider "microsoft365" {
+  cloud = "rx"
+  # ... other configuration
+}
+```
+
+## Disconnected Clouds and Private Clouds
+
+If you're using a disconnected cloud or private cloud such as Azure Stack, you may need to disable instance discovery:
+
+```hcl
+provider "microsoft365" {
+  cloud = "public"
+  
+  entra_id_options = {
+    disable_instance_discovery = true
+    # ... other authentication options
+  }
+}
+```
+
+Or using an environment variable:
+
+```bash
+export M365_DISABLE_INSTANCE_DISCOVERY="true"
+```
+
+<Warning>
+Only enable `disable_instance_discovery` for disconnected clouds or private clouds such as Azure Stack. Setting this to `true` will skip Microsoft Entra instance metadata requests, making your application responsible for ensuring the configured authority is valid and trustworthy.
+</Warning>
+
+## Choosing the Right Cloud
+
+<Steps>
+  <Step title="Identify your organization's cloud">
+    Check with your IT administrator or Azure portal to determine which cloud environment your organization uses.
+  </Step>
+  
+  <Step title="Verify tenant ID">
+    Ensure you're using the correct tenant ID for your cloud environment. Tenant IDs are unique to each cloud.
+  </Step>
+  
+  <Step title="Configure authentication">
+    Set up authentication credentials appropriate for your cloud environment.
+  </Step>
+  
+  <Step title="Test connectivity">
+    Verify that the provider can successfully authenticate and access the Microsoft Graph API in your cloud environment.
+  </Step>
+</Steps>
+
+## Environment Variable Example
+
+```bash
+# For US Government Cloud
+export M365_CLOUD="gcc"
+export M365_TENANT_ID="your-gov-tenant-id"
+export M365_CLIENT_ID="your-gov-client-id"
+export M365_CLIENT_SECRET="your-gov-client-secret"
+```
+
+## Complete Configuration Example
+
+```hcl
+terraform {
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"
+    }
+  }
+}
+
+variable "cloud" {
+  description = "The cloud environment to use"
+  type        = string
+  default     = "public"
+  
+  validation {
+    condition     = contains(["public", "dod", "gcc", "gcchigh", "china", "ex", "rx"], var.cloud)
+    error_message = "Cloud must be one of: public, dod, gcc, gcchigh, china, ex, rx"
+  }
+}
+
+provider "microsoft365" {
+  cloud       = var.cloud
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+}
+```

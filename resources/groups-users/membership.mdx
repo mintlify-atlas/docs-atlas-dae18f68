@@ -1,0 +1,71 @@
+---
+title: Group Membership
+description: Manage group members and owners
+---
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Member Assignment" icon="user-plus">
+    **Resource**: `microsoft365_graph_beta_groups_group_member_assignment`
+  </Card>
+  <Card title="Owner Assignment" icon="user-crown">
+    **Resource**: `microsoft365_graph_beta_groups_group_owner_assignment`
+  </Card>
+</CardGroup>
+
+## Add Group Member
+
+```hcl
+resource "microsoft365_graph_beta_groups_group_member_assignment" "member" {
+  group_id  = microsoft365_graph_beta_groups_group.team.id
+  member_id = microsoft365_graph_beta_users_user.employee.id
+}
+```
+
+## Add Group Owner
+
+```hcl
+resource "microsoft365_graph_beta_groups_group_owner_assignment" "owner" {
+  group_id = microsoft365_graph_beta_groups_group.team.id
+  owner_id = microsoft365_graph_beta_users_user.manager.id
+}
+```
+
+## Add Multiple Members
+
+```hcl
+resource "microsoft365_graph_beta_groups_group_member_assignment" "members" {
+  for_each = toset([
+    microsoft365_graph_beta_users_user.user1.id,
+    microsoft365_graph_beta_users_user.user2.id,
+    microsoft365_graph_beta_users_user.user3.id,
+  ])
+  
+  group_id  = microsoft365_graph_beta_groups_group.team.id
+  member_id = each.value
+}
+```
+
+## Group License Assignment
+
+```hcl
+resource "microsoft365_graph_beta_groups_license_assignment" "m365" {
+  group_id = microsoft365_graph_beta_groups_group.team.id
+  
+  add_licenses = [
+    {
+      sku_id = "<license-sku-id>"
+      disabled_plans = []
+    }
+  ]
+}
+```
+
+## Import Syntax
+
+```bash
+terraform import microsoft365_graph_beta_groups_group_member_assignment.member <group-id>_<member-id>
+
+terraform import microsoft365_graph_beta_groups_group_owner_assignment.owner <group-id>_<owner-id>
+```

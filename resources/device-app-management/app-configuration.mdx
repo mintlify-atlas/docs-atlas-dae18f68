@@ -1,0 +1,256 @@
+---
+title: App Configuration
+description: Manage app configuration policies for mobile and managed applications
+---
+
+App configuration policies allow you to provide platform-specific settings to mobile applications without requiring code changes.
+
+## Available Resources
+
+<CardGroup cols={2}>
+  <Card title="iOS Managed App Configuration" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy`
+    
+    Configure settings for iOS managed apps.
+  </Card>
+  
+  <Card title="Android Managed App Configuration" icon="android">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_android_managed_device_app_configuration_policy`
+    
+    Configure settings for Android managed apps.
+  </Card>
+  
+  <Card title="iOS Managed Mobile App" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_ios_managed_mobile_app`
+    
+    Apply app protection policies to iOS apps.
+  </Card>
+  
+  <Card title="Android Managed Mobile App" icon="android">
+    **Resource**: `microsoft365_graph_beta_device_and_app_management_android_managed_mobile_app`
+    
+    Apply app protection policies to Android apps.
+  </Card>
+</CardGroup>
+
+## iOS Managed App Configuration Example
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy" "outlook" {
+  display_name = "Outlook for iOS Configuration"
+  description  = "Configure Outlook app settings for iOS devices"
+  
+  # Target specific managed app
+  targeted_mobile_apps = [
+    microsoft365_graph_beta_device_and_app_management_ios_store_app.outlook.id
+  ]
+  
+  # App configuration settings (XML format)
+  encoded_setting_xml = base64encode(<<-EOT
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>IntuneMAMAllowedAccountsOnly</key>
+        <string>Enabled</string>
+        <key>IntuneMAMUPN</key>
+        <string>{{userprincipalname}}</string>
+        <key>com.microsoft.outlook.Mail.FocusedInbox</key>
+        <string>Enabled</string>
+    </dict>
+    </plist>
+  EOT
+  )
+}
+```
+
+## Android Managed App Configuration Example
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_android_managed_device_app_configuration_policy" "outlook" {
+  display_name = "Outlook for Android Configuration"
+  description  = "Configure Outlook app settings for Android devices"
+  
+  # Target specific managed app
+  targeted_mobile_apps = [
+    microsoft365_graph_beta_device_and_app_management_android_managed_mobile_app.outlook.id
+  ]
+  
+  # App configuration in JSON format
+  payload_json = jsonencode({
+    kind = "androidenterprise#managedConfiguration"
+    managedProperty = [
+      {
+        key   = "com.microsoft.intune.mam.managedbrowser.Account"
+        valueString = "{{userprincipalname}}"
+      },
+      {
+        key   = "com.microsoft.outlook.EmailProfile.EmailAddress"
+        valueString = "{{mail}}"
+      },
+      {
+        key   = "com.microsoft.outlook.EmailProfile.EmailUPN"
+        valueString = "{{userprincipalname}}"
+      }
+    ]
+  })
+}
+```
+
+## iOS Managed Mobile App Example
+
+Apply app protection policies to iOS apps:
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_ios_managed_mobile_app" "outlook_protection" {
+  mobile_app_identifier = {
+    bundle_id = "com.microsoft.office.outlook"
+  }
+  
+  version = "*"
+}
+```
+
+## Android Managed Mobile App Example
+
+Apply app protection policies to Android apps:
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_android_managed_mobile_app" "outlook_protection" {
+  mobile_app_identifier = {
+    package_id = "com.microsoft.office.outlook"
+  }
+  
+  version = "*"
+}
+```
+
+## Windows Managed Mobile App Example
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_windows_managed_mobile_app" "edge_protection" {
+  # Configuration for Windows app protection
+}
+```
+
+## Configuration Variables
+
+Use Intune configuration tokens in your app settings:
+
+| Token | Description | Example |
+|-------|-------------|----------|
+| `{{userprincipalname}}` | User's UPN | user@contoso.com |
+| `{{mail}}` | User's email | user@contoso.com |
+| `{{username}}` | Username | user |
+| `{{userid}}` | User's object ID | guid |
+| `{{deviceid}}` | Device ID | guid |
+| `{{devicename}}` | Device name | DESKTOP-ABC123 |
+
+## Common App Configurations
+
+### Microsoft Outlook
+
+<CodeGroup>
+```xml iOS Outlook
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>IntuneMAMUPN</key>
+    <string>{{userprincipalname}}</string>
+    <key>com.microsoft.outlook.Mail.FocusedInbox</key>
+    <string>Enabled</string>
+    <key>com.microsoft.outlook.Mail.Notifications</key>
+    <string>Enabled</string>
+</dict>
+</plist>
+```
+
+```json Android Outlook
+{
+  "kind": "androidenterprise#managedConfiguration",
+  "managedProperty": [
+    {
+      "key": "com.microsoft.outlook.EmailProfile.EmailAddress",
+      "valueString": "{{mail}}"
+    },
+    {
+      "key": "com.microsoft.outlook.EmailProfile.EmailUPN",
+      "valueString": "{{userprincipalname}}"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+### Microsoft Edge
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy" "edge" {
+  display_name = "Edge for iOS Configuration"
+  
+  targeted_mobile_apps = [
+    microsoft365_graph_beta_device_and_app_management_ios_store_app.edge.id
+  ]
+  
+  encoded_setting_xml = base64encode(<<-EOT
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>com.microsoft.intune.mam.managedbrowser.Account</key>
+        <string>{{userprincipalname}}</string>
+        <key>com.microsoft.intune.mam.managedbrowser.AllowTransitionOnBlock</key>
+        <false/>
+    </dict>
+    </plist>
+  EOT
+  )
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use configuration tokens for personalization">
+    Leverage tokens like `{{userprincipalname}}` and `{{mail}}` to personalize app settings for each user automatically.
+  </Accordion>
+
+  <Accordion title="Test configurations before wide deployment">
+    Deploy app configurations to a pilot group first to validate settings work as expected.
+  </Accordion>
+
+  <Accordion title="Document custom settings">
+    Keep documentation of custom XML/JSON settings and their purpose for future reference.
+  </Accordion>
+
+  <Accordion title="Version your configurations">
+    Use version numbers in display names to track configuration changes over time.
+  </Accordion>
+</AccordionGroup>
+
+## Import Syntax
+
+```bash
+# Import iOS managed app configuration
+terraform import microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy.outlook <policy-id>
+
+# Import Android managed app configuration
+terraform import microsoft365_graph_beta_device_and_app_management_android_managed_device_app_configuration_policy.outlook <policy-id>
+
+# Import iOS managed mobile app
+terraform import microsoft365_graph_beta_device_and_app_management_ios_managed_mobile_app.outlook <app-id>
+
+# Import Android managed mobile app
+terraform import microsoft365_graph_beta_device_and_app_management_android_managed_mobile_app.outlook <app-id>
+```
+
+## Related Resources
+
+- [Mobile Apps](/resources/device-app-management/mobile-apps) - Deploy mobile applications
+- [App Assignments](/resources/device-app-management/app-assignments) - Assign apps to users and devices
+- [Device Management](/resources/device-management/overview) - Device configuration policies
+
+<Note>
+  App configuration policies require the targeted apps to be deployed and support managed app configuration. Consult the app vendor's documentation for supported configuration keys.
+</Note>

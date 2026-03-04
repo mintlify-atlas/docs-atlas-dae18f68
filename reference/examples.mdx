@@ -1,0 +1,310 @@
+---
+title: Example Repository Index
+description: Index of example Terraform configurations for the Microsoft 365 Terraform Provider
+---
+
+This page provides an index to all example Terraform configurations available in the provider repository. These examples demonstrate real-world usage patterns for resources, data sources, actions, and other provider features.
+
+<Note>
+  All examples are available in the [examples directory](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples) of the GitHub repository.
+</Note>
+
+## Provider Configuration
+
+### Basic Provider Setup
+
+Example provider configurations for different authentication methods and cloud environments:
+
+<CardGroup cols={2}>
+  <Card title="Client Secret Authentication" icon="key" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/provider">
+    Basic provider configuration with client secret
+  </Card>
+  
+  <Card title="Certificate Authentication" icon="certificate" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/provider">
+    Provider setup with certificate-based authentication
+  </Card>
+  
+  <Card title="Managed Identity" icon="id-card" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/provider">
+    Azure Managed Identity configuration
+  </Card>
+  
+  <Card title="Government Cloud" icon="landmark" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/provider">
+    Configuration for US Government Cloud (GCC/GCC High)
+  </Card>
+</CardGroup>
+
+## Resources
+
+Examples for managing Microsoft 365 resources:
+
+### Device Management (Intune)
+
+<AccordionGroup>
+  <Accordion title="Windows Device Configuration" icon="windows">
+    - [Windows Update Rings](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_update_ring)
+    - [Windows Feature Updates](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_feature_update_policy)
+    - [Windows Quality Updates](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_quality_update_policy)
+    - [Windows Quality Update Expedite](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_quality_update_expedite_policy)
+    - [Windows Platform Scripts](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_platform_script)
+    - [Windows Remediation Scripts](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_remediation_script)
+    - [Windows Driver Update Profiles](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_driver_update_profile)
+    - [Windows Enrollment Status Page](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_enrollment_status_page)
+    - [Windows Compliance Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_device_compliance_policy)
+    - [Windows Compliance Scripts](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_device_compliance_script)
+    - [Windows Backup and Restore](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_backup_and_restore)
+  </Accordion>
+
+  <Accordion title="Windows Autopilot" icon="plane">
+    - [Autopilot Deployment Profiles](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_autopilot_deployment_profile)
+    - [Autopilot Device Identities](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_autopilot_device_identity)
+    - [Autopilot Device CSV Import](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_autopilot_device_csv_import)
+    - [Autopilot Device Preparation Policy](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_windows_autopilot_device_preparation_policy)
+  </Accordion>
+
+  <Accordion title="macOS Device Configuration" icon="apple">
+    - [macOS Device Compliance Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_macos_device_compliance_policy)
+    - [macOS Device Configuration Templates](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_macos_device_configuration_templates)
+    - [macOS Platform Scripts](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_macos_platform_script)
+    - [macOS Custom Attribute Scripts](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_macos_custom_attribute_script)
+    - [macOS Software Update Configuration](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_macos_software_update_configuration)
+  </Accordion>
+
+  <Accordion title="iOS/Android Device Configuration" icon="mobile">
+    - [iOS Device Compliance Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_ios_device_compliance_policy)
+    - [Android Device Owner Compliance Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_android_device_owner_compliance_policy)
+    - [AOSP Device Owner Compliance Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_aosp_device_owner_compliance_policy)
+  </Accordion>
+
+  <Accordion title="Settings Catalog" icon="sliders">
+    - [Settings Catalog Configuration Policy](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_settings_catalog_configuration_policy)
+    - [Settings Catalog Configuration Policy JSON](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_settings_catalog_configuration_policy_json)
+    - [Settings Catalog Template JSON](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_settings_catalog_template_json)
+  </Accordion>
+
+  <Accordion title="Group Policy" icon="file-lines">
+    - [Group Policy Configuration](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_group_policy_configuration)
+    - [Group Policy Definition](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_group_policy_definition)
+    - [Group Policy Uploaded Definition Files](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_group_policy_uploaded_definition_files)
+  </Accordion>
+
+  <Accordion title="Intune RBAC & Management" icon="user-shield">
+    - [Role Definitions](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_role_definition)
+    - [Role Assignments](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_role_assignment)
+    - [Role Scope Tags](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_role_scope_tag)
+    - [Assignment Filters](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_assignment_filter)
+    - [Device Categories](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_device_category)
+    - [Reusable Policy Settings](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_reuseable_policy_setting)
+    - [Policy Sets](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_management_policy_set)
+  </Accordion>
+</AccordionGroup>
+
+### Application Management
+
+<AccordionGroup>
+  <Accordion title="Windows Applications" icon="windows">
+    - [Win32 Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_win32_app)
+    - [WinGet Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_win_get_app)
+    - [Windows Web Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_windows_web_app)
+    - [Windows Managed Mobile Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_windows_managed_mobile_app)
+    - [Office Suite Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_office_suite_app)
+  </Accordion>
+
+  <Accordion title="macOS Applications" icon="apple">
+    - [macOS DMG Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_macos_dmg_app)
+    - [macOS LOB Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_macos_lob_app)
+    - [macOS PKG Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_macos_pkg_app)
+    - [macOS VPP Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_macos_vpp_app)
+  </Accordion>
+
+  <Accordion title="iOS/Android Applications" icon="mobile">
+    - [iOS Store Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_ios_store_app)
+    - [iOS Web Clips](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_ios_ipados_web_clip)
+    - [iOS Managed Mobile Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_ios_managed_mobile_app)
+    - [iOS Managed App Configuration](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_ios_managed_device_app_configuration_policy)
+    - [Android Managed Mobile Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_android_managed_mobile_app)
+    - [Android Managed App Configuration](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_android_managed_device_app_configuration_policy)
+  </Accordion>
+
+  <Accordion title="App Management" icon="gears">
+    - [Mobile App Assignments](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_mobile_app_assignment)
+    - [Mobile App Supersedence](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_mobile_app_supersedence)
+    - [Application Categories](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_device_and_app_management_application_category)
+  </Accordion>
+</AccordionGroup>
+
+### Identity & Access Management
+
+<AccordionGroup>
+  <Accordion title="Conditional Access" icon="shield-halved">
+    - [Conditional Access Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_identity_and_access_conditional_access_policy)
+    - [Named Locations](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_identity_and_access_named_location)
+    - [Authentication Strength Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_identity_and_access_authentication_strength_policy)
+    - [Authentication Contexts](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_identity_and_access_authentication_context)
+    - [Terms of Use](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_identity_and_access_conditional_access_terms_of_use)
+  </Accordion>
+
+  <Accordion title="Users & Groups" icon="users">
+    - [Users](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_users_user)
+    - [User License Assignments](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_users_user_license_assignment)
+    - [User Mailbox Settings](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_users_user_mailbox_settings)
+    - [User Manager Assignment](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_users_user_manager)
+    - [Groups](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_groups_group)
+    - [Group License Assignments](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_groups_license_assignment)
+    - [Group Member Assignments](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_groups_group_member_assignment)
+    - [Group Owner Assignments](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_groups_group_owner_assignment)
+    - [Group Settings](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_groups_group_settings)
+    - [Group Lifecycle Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_groups_group_lifecycle_expiration_policy)
+  </Accordion>
+
+  <Accordion title="Applications & Service Principals" icon="key">
+    - [Applications](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_applications_application)
+    - [Application Certificate Credentials](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_applications_application_certificate_credential)
+    - [Application Password Credentials](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_applications_application_password_credential)
+    - [Application Federated Identity Credentials](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_applications_application_federated_identity_credential)
+    - [Service Principals](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_applications_service_principal)
+    - [Service Principal App Role Assignments](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_applications_service_principal_app_role_assigned_to)
+  </Accordion>
+</AccordionGroup>
+
+### Windows 365 (Cloud PC)
+
+- [Azure Network Connections](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_windows_365_azure_network_connection)
+- [Cloud PC Provisioning Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_windows_365_cloud_pc_provisioning_policy)
+- [Cloud PC User Settings](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_windows_365_cloud_pc_user_setting)
+- [Cloud PC Device Images](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_windows_365_cloud_pc_device_image)
+- [Cloud PC Organization Settings](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_windows_365_cloud_pc_organization_settings)
+- [Cloud PC Alert Rules](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/resources/microsoft365_graph_beta_windows_365_cloud_pc_alert_rule)
+
+## Data Sources
+
+Examples for querying Microsoft 365 data:
+
+### Device Management Data Sources
+
+- [Assignment Filters](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_device_management_assignment_filter)
+- [Device Categories](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_device_management_device_category)
+- [Managed Devices](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_device_management_managed_device)
+- [Windows Update Catalog Items](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_device_management_windows_update_catalog_item)
+- [Group Policy Categories](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_device_management_group_policy_category)
+- [Group Policy Value References](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_device_management_group_policy_value_reference)
+
+### Application Data Sources
+
+- [Mobile Apps](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_device_and_app_management_mobile_app)
+- [Mobile App Catalog Packages](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_device_and_app_management_mobile_app_catalog_package)
+- [Application Categories](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_device_and_app_management_application_category)
+
+### Identity Data Sources
+
+- [Groups](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_groups_group)
+- [Applications](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_applications_application)
+- [Service Principals](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_applications_service_principal)
+- [Subscribed SKUs](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_identity_and_access_subscribed_skus)
+- [Tenant Information](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_graph_beta_identity_and_access_tenant_information)
+
+### Utility Data Sources
+
+- [Deployment Scheduler](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_utility_deployment_scheduler)
+- [GUID List Sharder](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_utility_guid_list_sharder)
+- [iTunes App Metadata](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_utility_itunes_app_metadata)
+- [macOS PKG App Metadata](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_utility_macos_pkg_app_metadata)
+- [Microsoft Store Package Manifest Metadata](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_utility_microsoft_store_package_manifest_metadata)
+- [Windows MSI App Metadata](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_utility_windows_msi_app_metadata)
+- [Microsoft 365 Endpoint Reference](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_utility_microsoft_365_endpoint_reference)
+- [Licensing Service Plan Reference](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/data-sources/microsoft365_utility_licensing_service_plan_reference)
+
+## Actions (Remote Device Operations)
+
+Examples for performing actions on managed devices:
+
+### Device Actions
+
+- [Reboot Device](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_reboot_now)
+- [Shutdown Device](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_shutdown)
+- [Sync Device](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_sync_device)
+- [Locate Device](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_locate_device)
+- [Remote Lock](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_remote_lock)
+- [Wipe Device](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_wipe)
+- [Retire Device](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_retire)
+
+### Security Actions
+
+- [Rotate BitLocker Keys](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/microsoft365_graph_beta_device_management_managed_device_rotate_bitlocker_keys)
+- [Rotate FileVault Key](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_rotate_file_vault_key)
+- [Windows Defender Scan](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_windows_defender_scan)
+- [Windows Defender Update Signatures](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_managed_device_windows_defender_update_signatures)
+
+### Autopilot Actions
+
+- [Assign User to Autopilot Device](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_windows_autopilot_device_identity_assign_user_to_device)
+- [Unassign User from Autopilot Device](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_windows_autopilot_device_identity_unassign_user_from_device)
+- [Update Autopilot Device Properties](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/actions/graph_beta_device_management_windows_autopilot_device_identity_update_device_properties)
+
+## List Resources
+
+Examples for listing and filtering resources:
+
+- [Settings Catalog Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/list-resources/microsoft365_graph_beta_device_management_settings_catalog_configuration_policy)
+- [Windows Platform Scripts](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/list-resources/microsoft365_graph_beta_device_management_windows_platform_script)
+- [Conditional Access Policies](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/list-resources/microsoft365_graph_beta_identity_and_access_conditional_access_policy)
+- [Users](https://github.com/deploymenttheory/terraform-provider-microsoft365/tree/main/examples/list-resources/microsoft365_graph_beta_users_user)
+
+## Using the Examples
+
+### Running Examples Locally
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```bash
+    git clone https://github.com/deploymenttheory/terraform-provider-microsoft365.git
+    cd terraform-provider-microsoft365/examples
+    ```
+  </Step>
+  
+  <Step title="Choose an Example">
+    Navigate to the example you want to use:
+    ```bash
+    cd resources/microsoft365_graph_beta_device_management_windows_update_ring
+    ```
+  </Step>
+  
+  <Step title="Configure Provider Authentication">
+    Set up your provider configuration with appropriate credentials:
+    ```hcl
+    provider "microsoft365" {
+      tenant_id     = var.tenant_id
+      client_id     = var.client_id
+      client_secret = var.client_secret
+    }
+    ```
+  </Step>
+  
+  <Step title="Initialize and Apply">
+    ```bash
+    terraform init
+    terraform plan
+    terraform apply
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Examples may create real resources in your Microsoft 365 tenant. Always review the configuration and use a test tenant when trying examples.
+</Warning>
+
+## Contributing Examples
+
+When adding new resources to the provider, please include:
+
+- Basic usage example
+- Advanced configuration example (if applicable)
+- Import example
+- Comments explaining key configuration options
+
+See the [Contributing Guide](/reference/contributing) for more information.
+
+## Related Resources
+
+- [Provider Configuration](/reference/provider-schema) - Provider setup and authentication
+- [Development Guide](/reference/development-guide) - Building new resources
+- [GitHub Repository](https://github.com/deploymenttheory/terraform-provider-microsoft365) - Source code and examples

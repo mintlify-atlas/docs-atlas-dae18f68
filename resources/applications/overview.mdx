@@ -1,0 +1,157 @@
+---
+title: Applications Overview
+description: Manage Azure AD application registrations, service principals, and credentials
+icon: grid-2
+---
+
+Application resources enable you to manage enterprise applications, app registrations, and their associated credentials and permissions.
+
+## Resource Categories
+
+<CardGroup cols={3}>
+  <Card title="App Registrations" icon="file-signature" href="/resources/applications/app-registrations">
+    Register and configure applications
+  </Card>
+  <Card title="Service Principals" icon="shield" href="/resources/applications/service-principals">
+    Enterprise application instances
+  </Card>
+  <Card title="Credentials" icon="key" href="/resources/applications/credentials">
+    Manage app secrets and certificates
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+### Create Application with Service Principal
+
+```hcl
+# Application registration
+resource "microsoft365_graph_beta_applications_application" "app" {
+  display_name = "My Application"
+  description  = "Application for accessing APIs"
+}
+
+# Service principal (enterprise app)
+resource "microsoft365_graph_beta_applications_service_principal" "sp" {
+  app_id = microsoft365_graph_beta_applications_application.app.app_id
+}
+
+# Application secret
+resource "microsoft365_graph_beta_applications_application_password_credential" "secret" {
+  application_id = microsoft365_graph_beta_applications_application.app.id
+  display_name   = "Terraform-managed secret"
+  end_date_time  = "2025-12-31T23:59:59Z"
+}
+```
+
+## Application Types
+
+### Web Application
+
+```hcl
+resource "microsoft365_graph_beta_applications_application" "web_app" {
+  display_name = "Corporate Web App"
+  
+  web = {
+    redirect_uris = [
+      "https://app.contoso.com/auth/callback"
+    ]
+    implicit_grant_settings = {
+      enable_id_token_issuance     = true
+      enable_access_token_issuance = false
+    }
+  }
+  
+  required_resource_access = [
+    {
+      resource_app_id = "00000003-0000-0000-c000-000000000000"  # Microsoft Graph
+      resource_access = [
+        {
+          id   = "e1fe6dd8-ba31-4d61-89e7-88639da4683d"  # User.Read
+          type = "Scope"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Single Page Application (SPA)
+
+```hcl
+resource "microsoft365_graph_beta_applications_application" "spa" {
+  display_name = "React SPA"
+  
+  spa = {
+    redirect_uris = [
+      "http://localhost:3000",
+      "https://spa.contoso.com"
+    ]
+  }
+  
+  sign_in_audience = "AzureADMyOrg"
+}
+```
+
+### Public Client (Mobile/Desktop)
+
+```hcl
+resource "microsoft365_graph_beta_applications_application" "mobile_app" {
+  display_name = "Mobile App"
+  
+  public_client = {
+    redirect_uris = [
+      "msauth://com.contoso.app/callback"
+    ]
+  }
+  
+  is_fallback_public_client = true
+}
+```
+
+## Service Principal Roles
+
+Assign directory roles to service principals:
+
+```hcl
+resource "microsoft365_graph_beta_applications_service_principal_app_role_assigned_to" "role" {
+  service_principal_id = microsoft365_graph_beta_applications_service_principal.sp.id
+  principal_id         = microsoft365_graph_beta_applications_service_principal.sp.id
+  resource_id          = "<resource-sp-id>"
+  app_role_id          = "<role-id>"
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use managed identities when possible">
+    For Azure resources, prefer managed identities over application credentials.
+  </Accordion>
+
+  <Accordion title="Rotate secrets regularly">
+    Implement automated secret rotation with appropriate expiry dates.
+  </Accordion>
+
+  <Accordion title="Follow least privilege">
+    Grant only the minimum required API permissions.
+  </Accordion>
+
+  <Accordion title="Use certificate authentication for production">
+    Certificates are more secure than client secrets for production scenarios.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="App Registrations" href="/resources/applications/app-registrations">
+    Register applications
+  </Card>
+  <Card title="Service Principals" href="/resources/applications/service-principals">
+    Manage enterprise apps
+  </Card>
+  <Card title="Credentials" href="/resources/applications/credentials">
+    Secure app access
+  </Card>
+</CardGroup>

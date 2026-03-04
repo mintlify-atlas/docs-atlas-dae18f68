@@ -1,0 +1,357 @@
+---
+title: Proxy Settings
+description: Configure proxy settings for the Microsoft 365 Terraform Provider
+---
+
+The Microsoft 365 provider supports HTTP proxy configuration for environments that require proxy access for internet connectivity.
+
+## Basic Proxy Configuration
+
+```hcl
+provider "microsoft365" {
+  # ... authentication configuration ...
+  
+  client_options = {
+    use_proxy = true
+    proxy_url = "http://proxy.example.com:8080"
+  }
+}
+```
+
+## Configuration Parameters
+
+<ParamField path="use_proxy" type="boolean" default="false">
+  Enable the use of a proxy server for all network requests made by the provider.
+  
+  When set to `true`, the provider will route all HTTP requests through the specified proxy server. Requires `proxy_url` to be set.
+  
+  Can be set using the `M365_USE_PROXY` environment variable.
+</ParamField>
+
+<ParamField path="proxy_url" type="string" required>
+  The URL of the proxy server.
+  
+  Must be a valid URL including the scheme (http:// or https://) and can include a port number.
+  
+  **Format:** `http://hostname:port` or `https://hostname:port`
+  
+  Required when `use_proxy` is `true`. Ignored if `use_proxy` is `false`.
+  
+  Can be set using the `M365_PROXY_URL` environment variable.
+</ParamField>
+
+<ParamField path="proxy_username" type="string">
+  Username for proxy authentication.
+  
+  Optional. Only needed if your proxy server requires authentication. Used in conjunction with `proxy_password`.
+  
+  Can be set using the `M365_PROXY_USERNAME` environment variable.
+</ParamField>
+
+<ParamField path="proxy_password" type="string" sensitive>
+  Password for proxy authentication.
+  
+  Optional. Only needed if your proxy server requires authentication. Used in conjunction with `proxy_username`.
+  
+  Treated as sensitive information and will be masked in logs.
+  
+  Can be set using the `M365_PROXY_PASSWORD` environment variable.
+</ParamField>
+
+## Unauthenticated Proxy
+
+For proxy servers that do not require authentication:
+
+```hcl
+provider "microsoft365" {
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+
+  client_options = {
+    use_proxy = true
+    proxy_url = "http://proxy.example.com:8080"
+  }
+}
+```
+
+Or using environment variables:
+
+```bash
+export M365_USE_PROXY="true"
+export M365_PROXY_URL="http://proxy.example.com:8080"
+```
+
+## Authenticated Proxy
+
+For proxy servers that require username and password authentication:
+
+```hcl
+provider "microsoft365" {
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+
+  client_options = {
+    use_proxy      = true
+    proxy_url      = "http://proxy.example.com:8080"
+    proxy_username = var.proxy_username
+    proxy_password = var.proxy_password
+  }
+}
+```
+
+<Warning>
+Never commit proxy credentials directly in your configuration files. Always use environment variables or Terraform variables for sensitive information.
+</Warning>
+
+Using environment variables (recommended):
+
+```bash
+export M365_USE_PROXY="true"
+export M365_PROXY_URL="http://proxy.example.com:8080"
+export M365_PROXY_USERNAME="proxyuser"
+export M365_PROXY_PASSWORD="proxypassword"
+```
+
+## HTTPS Proxy
+
+For HTTPS proxy servers:
+
+```hcl
+client_options = {
+  use_proxy = true
+  proxy_url = "https://secure-proxy.example.com:8443"
+}
+```
+
+```bash
+export M365_PROXY_URL="https://secure-proxy.example.com:8443"
+```
+
+## Using Variables for Proxy Configuration
+
+```hcl
+variable "use_proxy" {
+  description = "Enable proxy for network requests"
+  type        = bool
+  default     = false
+}
+
+variable "proxy_url" {
+  description = "Proxy server URL"
+  type        = string
+  default     = ""
+}
+
+variable "proxy_username" {
+  description = "Proxy authentication username"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "proxy_password" {
+  description = "Proxy authentication password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+provider "microsoft365" {
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+
+  client_options = {
+    use_proxy      = var.use_proxy
+    proxy_url      = var.proxy_url
+    proxy_username = var.proxy_username
+    proxy_password = var.proxy_password
+  }
+}
+```
+
+## Complete Configuration Example
+
+```hcl
+terraform {
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"
+    }
+  }
+}
+
+provider "microsoft365" {
+  cloud       = "public"
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+
+  client_options = {
+    # Proxy configuration
+    use_proxy      = true
+    proxy_url      = "http://proxy.example.com:8080"
+    proxy_username = var.proxy_username
+    proxy_password = var.proxy_password
+    
+    # Other client options
+    enable_retry        = true
+    max_retries         = 3
+    retry_delay_seconds = 5
+    enable_compression  = true
+    timeout_seconds     = 300
+  }
+}
+```
+
+## Environment Variable Example
+
+Create a `.env` file (never commit this file):
+
+```bash
+# Proxy Configuration
+export M365_USE_PROXY="true"
+export M365_PROXY_URL="http://proxy.example.com:8080"
+export M365_PROXY_USERNAME="proxyuser"
+export M365_PROXY_PASSWORD="proxypassword"
+
+# Provider Configuration
+export M365_CLOUD="public"
+export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+export M365_AUTH_METHOD="client_secret"
+export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+export M365_CLIENT_SECRET="your-client-secret"
+```
+
+Source the file before running Terraform:
+
+```bash
+source .env
+terraform plan
+```
+
+## Testing Proxy Configuration
+
+To verify your proxy configuration is working:
+
+1. Enable debug mode:
+
+```hcl
+provider "microsoft365" {
+  debug_mode = true
+  
+  client_options = {
+    use_proxy = true
+    proxy_url = "http://proxy.example.com:8080"
+  }
+}
+```
+
+2. Run a simple Terraform operation:
+
+```bash
+terraform init
+terraform plan
+```
+
+3. Check the Terraform logs for proxy-related messages.
+
+## Common Proxy Scenarios
+
+### Corporate Network with Authenticated Proxy
+
+```bash
+export M365_USE_PROXY="true"
+export M365_PROXY_URL="http://corporate-proxy.company.com:8080"
+export M365_PROXY_USERNAME="${AD_USERNAME}"
+export M365_PROXY_PASSWORD="${AD_PASSWORD}"
+```
+
+### Development Environment with Local Proxy
+
+```bash
+export M365_USE_PROXY="true"
+export M365_PROXY_URL="http://localhost:8888"  # e.g., Fiddler or Charles
+```
+
+### CI/CD Pipeline with Proxy
+
+```yaml
+# GitHub Actions example
+env:
+  M365_USE_PROXY: "true"
+  M365_PROXY_URL: "http://proxy.example.com:8080"
+  M365_PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+  M365_PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection timeout through proxy">
+    - Verify the proxy URL is correct and accessible
+    - Check that the proxy server is running and accepting connections
+    - Ensure firewall rules allow traffic to the proxy server
+    - Try increasing `timeout_seconds` in client_options
+  </Accordion>
+  
+  <Accordion title="Authentication failed with proxy">
+    - Verify proxy username and password are correct
+    - Check if the proxy requires domain credentials (e.g., DOMAIN\\username)
+    - Ensure special characters in credentials are properly escaped
+    - Test proxy credentials using curl or another tool
+  </Accordion>
+  
+  <Accordion title="SSL/TLS errors through proxy">
+    - Some proxies intercept HTTPS traffic and may cause certificate validation errors
+    - Check with your network administrator about SSL inspection policies
+    - Ensure the proxy's CA certificate is trusted on your system
+  </Accordion>
+  
+  <Accordion title="Proxy works but authentication fails">
+    - The proxy configuration only affects HTTP client connections
+    - Authentication to Microsoft Entra ID may require additional network access
+    - Verify that the proxy allows access to Microsoft authentication endpoints
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Card title="Use Environment Variables" icon="key">
+  Always use environment variables for proxy credentials instead of hardcoding them in configuration files.
+</Card>
+
+<Card title="Test Without Proxy First" icon="flask">
+  If possible, test your configuration without a proxy first to isolate proxy-related issues.
+</Card>
+
+<Card title="Enable Debug Mode" icon="bug">
+  Enable debug_mode when troubleshooting proxy connectivity issues to see detailed logs.
+</Card>
+
+<Card title="Document Proxy Requirements" icon="book">
+  Document your proxy requirements and configuration in your project's README for team members.
+</Card>
+
+<Card title="Secure Credentials" icon="lock">
+  Never commit proxy credentials to version control. Use secret management tools or environment variables.
+</Card>

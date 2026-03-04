@@ -1,0 +1,64 @@
+---
+title: Service Principals
+description: Manage enterprise application instances and service principals
+---
+
+## Resources
+
+<Card title="Service Principal" icon="shield">
+  **Resource**: `microsoft365_graph_beta_applications_service_principal`
+  
+  Create service principals (enterprise application instances) for registered applications.
+</Card>
+
+## Basic Service Principal
+
+```hcl
+resource "microsoft365_graph_beta_applications_application" "app" {
+  display_name = "My Application"
+}
+
+resource "microsoft365_graph_beta_applications_service_principal" "sp" {
+  app_id = microsoft365_graph_beta_applications_application.app.app_id
+}
+```
+
+## With Owner
+
+```hcl
+resource "microsoft365_graph_beta_applications_service_principal" "sp" {
+  app_id = microsoft365_graph_beta_applications_application.app.app_id
+}
+
+resource "microsoft365_graph_beta_applications_service_principal_owner" "owner" {
+  service_principal_id = microsoft365_graph_beta_applications_service_principal.sp.id
+  owner_id             = microsoft365_graph_beta_users_user.admin.id
+}
+```
+
+## App Role Assignment
+
+```hcl
+resource "microsoft365_graph_beta_applications_service_principal_app_role_assigned_to" "assignment" {
+  service_principal_id = microsoft365_graph_beta_applications_service_principal.sp.id
+  principal_id         = microsoft365_graph_beta_groups_group.users.id
+  resource_id          = microsoft365_graph_beta_applications_service_principal.sp.id
+  app_role_id          = "<role-id>"
+}
+```
+
+## Group App Role Assignment
+
+```hcl
+resource "microsoft365_graph_beta_groups_group_app_role_assignment" "group_role" {
+  group_id             = microsoft365_graph_beta_groups_group.users.id
+  resource_id          = microsoft365_graph_beta_applications_service_principal.sp.id
+  app_role_id          = "00000000-0000-0000-0000-000000000000"
+}
+```
+
+## Import Syntax
+
+```bash
+terraform import microsoft365_graph_beta_applications_service_principal.sp <service-principal-object-id>
+```

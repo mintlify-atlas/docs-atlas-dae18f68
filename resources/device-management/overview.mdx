@@ -1,0 +1,237 @@
+---
+title: Device Management Overview
+description: Resources for managing device configurations, compliance, and enrollment in Microsoft Intune
+icon: laptop
+---
+
+Device Management resources enable you to configure, secure, and manage devices across Windows, macOS, iOS, Android, and Linux platforms.
+
+## Resource Categories
+
+<CardGroup cols={2}>
+  <Card title="Configuration Policies" icon="sliders" href="/resources/device-management/configuration-policies">
+    Device settings and configurations
+  </Card>
+  <Card title="Compliance Policies" icon="shield-check" href="/resources/device-management/compliance-policies">
+    Device compliance requirements
+  </Card>
+  <Card title="Windows Updates" icon="arrows-rotate" href="/resources/device-management/windows-updates">
+    Update rings and driver updates
+  </Card>
+  <Card title="Device Enrollment" icon="right-to-bracket" href="/resources/device-management/enrollment">
+    Enrollment policies and configurations
+  </Card>
+</CardGroup>
+
+## Platform Support
+
+| Platform | Configuration | Compliance | Updates | Enrollment |
+|----------|--------------|------------|---------|------------|
+| Windows | ✓ | ✓ | ✓ | ✓ |
+| macOS | ✓ | ✓ | ✓ | ✓ |
+| iOS/iPadOS | ✓ | ✓ | - | ✓ |
+| Android | ✓ | ✓ | - | ✓ |
+| Linux | ✓ | ✓ | - | - |
+
+## Quick Start
+
+### Windows Compliance Policy
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_device_compliance_policy" "baseline" {
+  display_name = "Windows 11 Baseline Compliance"
+  description  = "Baseline compliance requirements for Windows 11 devices"
+  
+  # Require BitLocker
+  bit_locker_enabled = true
+  
+  # Require secure boot
+  secure_boot_enabled = true
+  
+  # OS version requirements
+  os_minimum_version = "10.0.22000.0"
+  
+  # Password requirements
+  password_required               = true
+  password_minimum_length         = 8
+  password_required_type          = "alphanumeric"
+  password_minutes_of_inactivity_before_lock = 15
+}
+```
+
+### Settings Catalog Configuration
+
+```hcl
+resource "microsoft365_graph_beta_device_management_settings_catalog_configuration_policy" "security" {
+  name        = "Windows Security Settings"
+  description = "Security configuration for Windows devices"
+  platforms   = "windows10"
+  technologies = "mdm"
+  
+  settings = [
+    {
+      setting_instance = {
+        setting_definition_id = "device_vendor_msft_policy_config_defender_allowrealtimemonitoring"
+        setting_value = {
+          value = "1"
+        }
+      }
+    }
+  ]
+}
+```
+
+## Common Scenarios
+
+<AccordionGroup>
+  <Accordion title="Enforce device compliance">
+    Create compliance policies to ensure devices meet your security requirements before accessing corporate resources.
+    
+    - Minimum OS versions
+    - Encryption requirements
+    - Password policies
+    - Security features (firewall, antivirus)
+  </Accordion>
+
+  <Accordion title="Deploy configuration profiles">
+    Use configuration policies to standardize device settings:
+    
+    - Wi-Fi and VPN configurations
+    - Email profiles
+    - Certificate deployment
+    - Security baselines
+  </Accordion>
+
+  <Accordion title="Manage Windows Updates">
+    Control update deployment timing and behavior:
+    
+    - Update rings for different user groups
+    - Deferral periods for testing
+    - Maintenance windows
+    - Feature update controls
+  </Accordion>
+
+  <Accordion title="Configure device enrollment">
+    Customize the enrollment experience:
+    
+    - Enrollment restrictions
+    - Auto-enrollment settings
+    - Terms and conditions
+    - Branding and customization
+  </Accordion>
+</AccordionGroup>
+
+## Policy Assignment
+
+Most device management policies support flexible assignment:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_device_compliance_policy" "policy" {
+  display_name = "Compliance Policy"
+  # ... policy settings
+}
+
+# Assign to specific group
+resource "microsoft365_graph_beta_device_management_device_compliance_policy_assignment" "assignment" {
+  policy_id = microsoft365_graph_beta_device_management_windows_device_compliance_policy.policy.id
+  
+  target = {
+    assignment_target_type = "groupAssignmentTarget"
+    group_id              = microsoft365_graph_beta_groups_group.windows_devices.id
+  }
+}
+```
+
+## Advanced Features
+
+### Endpoint Privilege Management
+
+Control elevation of privileges on Windows devices:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_endpoint_privilege_management_json" "elevation_rules" {
+  # Configure privilege elevation rules
+}
+```
+
+### App Control for Business
+
+Manage application control policies:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_app_control_for_business_policy" "applocker" {
+  display_name = "AppLocker Policy"
+  # ... configuration
+}
+```
+
+### Remediation Scripts
+
+Deploy PowerShell scripts for device remediation:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_remediation_script" "cleanup" {
+  display_name = "Disk Cleanup Script"
+  # ... script configuration
+}
+```
+
+## Role-Based Access Control
+
+Manage Intune RBAC permissions:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_role_definition" "custom_role" {
+  display_name = "Device Manager"
+  description  = "Can manage device configurations"
+  
+  # ... permissions
+}
+
+resource "microsoft365_graph_beta_device_management_role_assignment" "assignment" {
+  role_definition_id = microsoft365_graph_beta_device_management_role_definition.custom_role.id
+  
+  # ... scope and members
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Start with compliance policies">
+    Define compliance requirements before deploying configuration policies to ensure devices meet minimum standards.
+  </Step>
+  
+  <Step title="Use pilot groups for testing">
+    Test new policies with pilot groups before broad deployment to identify issues early.
+  </Step>
+  
+  <Step title="Monitor compliance status">
+    Regularly review compliance reports to identify non-compliant devices and take corrective action.
+  </Step>
+  
+  <Step title="Document your policies">
+    Maintain documentation of policy intent, settings, and assignment targets for operational clarity.
+  </Step>
+  
+  <Step title="Plan for updates">
+    Create a structured update deployment strategy with rings for different user populations.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration Policies" icon="sliders" href="/resources/device-management/configuration-policies">
+    Create device configuration policies
+  </Card>
+  <Card title="Compliance Policies" icon="shield-check" href="/resources/device-management/compliance-policies">
+    Define compliance requirements
+  </Card>
+  <Card title="Windows Updates" icon="arrows-rotate" href="/resources/device-management/windows-updates">
+    Manage Windows Update deployment
+  </Card>
+  <Card title="Enrollment" icon="right-to-bracket" href="/resources/device-management/enrollment">
+    Configure device enrollment
+  </Card>
+</CardGroup>

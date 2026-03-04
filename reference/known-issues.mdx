@@ -1,0 +1,338 @@
+---
+title: Known Issues & Limitations
+description: Known bugs, limitations, and workarounds for the Microsoft 365 Terraform Provider
+---
+
+This document tracks known bugs and limitations in the provider, particularly those related to Microsoft Graph API issues and other external dependencies outside of the provider's direct control.
+
+## How to Report Issues
+
+If you encounter a new issue:
+
+<Steps>
+  <Step title="Search Existing Issues">
+    Check this document and [GitHub Issues](https://github.com/deploymenttheory/terraform-provider-microsoft365/issues) to avoid duplicates
+  </Step>
+  
+  <Step title="Verify Reproducibility">
+    Confirm the issue is reproducible in your environment and not environment-specific
+  </Step>
+  
+  <Step title="Report New Issues">
+    Use the [GitHub Issue Template](https://github.com/deploymenttheory/terraform-provider-microsoft365/issues/new/choose) and include all required information
+  </Step>
+  
+  <Step title="Include Details">
+    Provide:
+    - Provider version
+    - Terraform version
+    - Resource name
+    - Reproduction steps
+    - Error messages
+    - Environment details (cloud, OS)
+  </Step>
+</Steps>
+
+## Issue Tracking Template
+
+When documenting issues, use this template for consistency:
+
+```markdown
+### [BUG-XXX] Brief Issue Title
+
+**Bug ID:** BUG-XXX
+**Resource:** `resource_name_here`
+**Provider Version:** vX.X.X (first affected version)
+**Date Reported:** YYYY-MM-DD
+**Last Verified:** YYYY-MM-DD
+**Impact Level:** Critical/High/Medium/Low
+
+#### Affected API Endpoints
+- `/path/to/graph/endpoint`
+- `/another/affected/endpoint`
+
+#### Expected Behavior
+Description of what should happen according to documentation.
+
+#### Observed Behavior
+Description of what actually happens, including error messages.
+
+#### Reproduction Steps
+1. Step one
+2. Step two
+3. Step three
+
+#### Environment Details
+- **Affected Clouds:** Public/GCC/GCC High/DoD/China/All
+- **Terraform Version:** vX.X.X
+- **Provider Version:** vX.X.X
+- **Operating System:** Windows/macOS/Linux
+
+#### Status
+- **Current Status:** Open/Investigating/Microsoft Acknowledged/Fixed/Workaround Available
+- **Microsoft Status:** Not Reported/Reported/Acknowledged/In Progress/Fixed/Won't Fix
+- **Upstream Links:**
+  - Microsoft Graph Known Issues: [link if applicable]
+  - GitHub Issues: [link to related issues]
+
+#### Workarounds
+Description of available workarounds.
+
+#### Additional Notes
+Any other relevant information.
+```
+
+## Current Known Issues
+
+### Microsoft Graph API Limitations
+
+<AccordionGroup>
+  <Accordion title="[GRAPH-001] Eventual Consistency with Assignment Changes" icon="clock">
+    **Impact Level:** Medium
+    
+    **Affected Resources:**
+    - `microsoft365_graph_beta_device_management_windows_update_ring`
+    - `microsoft365_graph_beta_device_management_*` (assignment-related resources)
+    
+    **Issue:**
+    Assignment filter changes are accepted by the API but may not be immediately visible in read operations due to Microsoft Graph eventual consistency. Devices may continue to receive old assignment targeting for up to 24 hours.
+    
+    **Affected API Endpoints:**
+    - `/deviceManagement/deviceConfigurations/{id}/assign`
+    - `/deviceManagement/deviceConfigurations/{id}?$expand=assignments`
+    
+    **Status:** Microsoft Acknowledged - Known limitation of Graph API
+    
+    **Workarounds:**
+    1. **Wait Period:** Allow 15-30 minutes after assignment changes before expecting full consistency
+    2. **Retry Logic:** Implement retry logic in deployment pipelines when checking assignment state
+    3. **Manual Verification:** Verify assignment changes in Microsoft Endpoint Manager console
+    
+    **Additional Notes:**
+    This is a known limitation of Microsoft Graph's eventual consistency model, not a provider bug. The provider correctly sends API requests, but Microsoft's backend systems require time to propagate changes.
+  </Accordion>
+
+  <Accordion title="[GRAPH-002] Throttling and Rate Limits" icon="gauge">
+    **Impact Level:** Medium
+    
+    **Issue:**
+    Microsoft Graph API implements throttling to protect service health. Large-scale Terraform deployments may encounter HTTP 429 (Too Many Requests) errors.
+    
+    **Affected Operations:**
+    - Bulk resource creation
+    - Large `terraform apply` operations
+    - Concurrent operations across multiple resources
+    
+    **Status:** Microsoft Documented - Working as designed
+    
+    **Workarounds:**
+    1. **Provider Retry Logic:** The provider automatically retries with exponential backoff
+    2. **Spread Operations:** Break large deployments into smaller batches
+    3. **Sequential Execution:** Use `-parallelism=1` flag to reduce concurrent API calls:
+       ```bash
+       terraform apply -parallelism=1
+       ```
+    4. **Wait Between Runs:** Add delays between successive `terraform apply` operations
+    
+    **Rate Limit Details:**
+    - Per-user limits: ~2,000 requests per 5 minutes
+    - Per-app limits: ~10,000 requests per 10 minutes
+    - Limits vary by endpoint and tenant
+    
+    **References:**
+    - [Microsoft Graph throttling guidance](https://learn.microsoft.com/en-us/graph/throttling)
+  </Accordion>
+
+  <Accordion title="[GRAPH-003] Beta API Stability" icon="flask">
+    **Impact Level:** Low to Medium
+    
+    **Affected Resources:**
+    - All resources using `microsoft365_graph_beta_*` prefix
+    
+    **Issue:**
+    Microsoft Graph Beta API endpoints may change without notice, including:
+    - Schema changes
+    - New required fields
+    - Deprecated fields
+    - Endpoint URL changes
+    - Behavior changes
+    
+    **Status:** Microsoft Documented - Beta API subject to change
+    
+    **Workarounds:**
+    1. **Pin Provider Version:** Use exact version constraints in production:
+       ```hcl
+       terraform {
+         required_providers {
+           microsoft365 = {
+             source  = "deploymenttheory/microsoft365"
+             version = "= 0.46.0-alpha"
+           }
+         }
+       }
+       ```
+    2. **Test Before Upgrading:** Always test provider upgrades in non-production environments
+    3. **Monitor Release Notes:** Review changelog for breaking changes
+    4. **Prefer v1.0 When Available:** Use Graph v1.0 resources when stable alternatives exist
+    
+    **Additional Notes:**
+    This is expected behavior for beta APIs. Microsoft recommends using v1.0 endpoints for production workloads.
+  </Accordion>
+</AccordionGroup>
+
+### Provider-Specific Limitations
+
+<AccordionGroup>
+  <Accordion title="[PROV-001] Alpha Release Status" icon="triangle-exclamation">
+    **Impact Level:** High
+    
+    **Issue:**
+    The provider is in alpha release (v0.x.x-alpha). Breaking changes may occur between minor versions during this phase.
+    
+    **Affected:**
+    - All resources and data sources
+    
+    **Status:** Expected - Alpha development phase
+    
+    **Recommendations:**
+    1. **Pin Exact Versions:** Use `version = "= X.X.X-alpha"` in production
+    2. **Test Upgrades:** Always test provider version upgrades in dev/staging first
+    3. **Review Changelogs:** Check release notes for breaking changes before upgrading
+    4. **Backup State:** Maintain Terraform state backups before upgrades
+    5. **CI/CD Integration:** Include provider version in CI/CD pipelines for consistency
+    
+    **Migration to Stable:**
+    The provider will eventually move to stable (v1.0.0+) release. Migration guides will be provided for breaking changes.
+  </Accordion>
+
+  <Accordion title="[PROV-002] Large Resource Updates" icon="database">
+    **Impact Level:** Low
+    
+    **Issue:**
+    Resources with very large configuration blocks (e.g., Settings Catalog policies with hundreds of settings) may experience longer apply times.
+    
+    **Affected Resources:**
+    - `microsoft365_graph_beta_device_management_settings_catalog_configuration_policy_json`
+    - Resources with complex nested blocks
+    
+    **Status:** Known limitation - Optimization ongoing
+    
+    **Workarounds:**
+    1. **Increase Timeouts:** Configure longer timeouts for large resources:
+       ```hcl
+       resource "microsoft365_graph_beta_device_management_settings_catalog_configuration_policy_json" "large_policy" {
+         # ... configuration ...
+         
+         timeouts {
+           create = "30m"
+           update = "30m"
+           read   = "10m"
+         }
+       }
+       ```
+    2. **Split Policies:** Break very large policies into multiple smaller policies if possible
+    3. **Batch Updates:** Group related changes together rather than frequent small updates
+  </Accordion>
+</AccordionGroup>
+
+## Issue Status Definitions
+
+<ParamField path="Open" type="status">
+  Issue identified but not yet investigated
+</ParamField>
+
+<ParamField path="Investigating" type="status">
+  Provider team is researching the issue
+</ParamField>
+
+<ParamField path="Microsoft Acknowledged" type="status">
+  Microsoft has acknowledged the underlying API issue
+</ParamField>
+
+<ParamField path="Fixed in Graph" type="status">
+  Microsoft has fixed the underlying API issue
+</ParamField>
+
+<ParamField path="Workaround Available" type="status">
+  Temporary solution is available
+</ParamField>
+
+<ParamField path="Closed" type="status">
+  Issue has been resolved
+</ParamField>
+
+## Impact Level Definitions
+
+| Level | Description |
+|-------|-------------|
+| **Critical** | Complete functionality failure, no workaround available |
+| **High** | Major functionality impaired, limited workarounds |
+| **Medium** | Functionality affected but workarounds available |
+| **Low** | Minor inconvenience, easy workarounds available |
+
+## Contributing to Issue Tracking
+
+When contributing to this document:
+
+<CardGroup cols={2}>
+  <Card title="Use the Template" icon="clipboard-list">
+    Follow the issue template format for consistency
+  </Card>
+  
+  <Card title="Assign Bug IDs" icon="hashtag">
+    Use sequential IDs (BUG-001, BUG-002, GRAPH-001, PROV-001)
+  </Card>
+  
+  <Card title="Complete Information" icon="circle-check">
+    Include all required fields - don't leave sections empty
+  </Card>
+  
+  <Card title="Verify Before Adding" icon="magnifying-glass">
+    Check for duplicates before documenting new issues
+  </Card>
+  
+  <Card title="Update Regularly" icon="arrows-rotate">
+    Keep status and workarounds current as issues evolve
+  </Card>
+  
+  <Card title="Link Resources" icon="link">
+    Link to related GitHub issues and Microsoft docs
+  </Card>
+</CardGroup>
+
+## Helpful Resources
+
+<CardGroup cols={2}>
+  <Card title="Microsoft Graph Known Issues" icon="microsoft" href="https://docs.microsoft.com/en-us/graph/known-issues">
+    Official Microsoft Graph API known issues documentation
+  </Card>
+  
+  <Card title="Graph Feedback Portal" icon="comments" href="https://aka.ms/graphfeedback">
+    Submit feedback and feature requests to Microsoft
+  </Card>
+  
+  <Card title="Provider GitHub Issues" icon="github" href="https://github.com/deploymenttheory/terraform-provider-microsoft365/issues">
+    Report provider-specific issues and bugs
+  </Card>
+  
+  <Card title="M365 Service Health" icon="heart-pulse" href="https://admin.microsoft.com/servicehealth">
+    Check Microsoft 365 service health and incidents
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you need assistance with an issue:
+
+1. **Check this documentation** for known issues and workarounds
+2. **Search GitHub Issues** for similar problems
+3. **Join the Discord community** for real-time help: [discord.gg/Uq8zG6g7WE](https://discord.gg/Uq8zG6g7WE)
+4. **Create a GitHub Issue** with detailed reproduction steps
+5. **Contact Microsoft Support** for Graph API-specific issues (if you have a support contract)
+
+## Related Resources
+
+- [Changelog](/reference/changelog) - Version history and bug fixes
+- [Provider Roadmap](/reference/provider-roadmap) - Planned improvements
+- [Development Guide](/reference/development-guide) - Contributing fixes
+- [Contributing Guide](/reference/contributing) - How to contribute

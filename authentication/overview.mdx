@@ -1,0 +1,192 @@
+---
+title: Authentication Overview
+description: Overview of all authentication methods supported by the Microsoft 365 Terraform Provider
+---
+
+The Microsoft 365 Terraform Provider supports multiple authentication methods for accessing Microsoft 365 services. Each authentication method has specific use cases, benefits, and limitations. Review the appropriate guide to determine which method best suits your deployment scenario.
+
+## Supported Authentication Methods
+
+The provider supports the following authentication methods:
+
+### Production & Automation
+
+<CardGroup cols={2}>
+  <Card title="Client Secret" icon="key" href="/authentication/client-secret">
+    Service Principal authentication with client secret - ideal for automated processes and CI/CD pipelines
+  </Card>
+  
+  <Card title="Client Certificate" icon="certificate" href="/authentication/client-certificate">
+    Service Principal authentication with certificate - more secure than client secrets
+  </Card>
+  
+  <Card title="Managed Identity" icon="shield-halved" href="/authentication/managed-identity">
+    Credential-free authentication for Azure VMs and Container Instances
+  </Card>
+  
+  <Card title="Workload Identity" icon="sitemap" href="/authentication/workload-identity">
+    Kubernetes workload identity federation for containerized applications
+  </Card>
+</CardGroup>
+
+### OpenID Connect (OIDC)
+
+<CardGroup cols={2}>
+  <Card title="Generic OIDC" icon="id-badge" href="/authentication/oidc">
+    OpenID Connect federation for custom identity providers
+  </Card>
+  
+  <Card title="GitHub OIDC" icon="github" href="/authentication/oidc-github">
+    GitHub Actions OIDC authentication - no secrets in workflows
+  </Card>
+  
+  <Card title="Azure DevOps OIDC" icon="microsoft" href="/authentication/oidc-azure-devops">
+    Azure DevOps Pipelines OIDC authentication
+  </Card>
+</CardGroup>
+
+### Development & Interactive
+
+<CardGroup cols={2}>
+  <Card title="Azure CLI" icon="terminal" href="/authentication/azure-cli">
+    Use existing Azure CLI authentication - ideal for local development
+  </Card>
+  
+  <Card title="Azure Developer CLI" icon="code" href="/authentication/azure-developer-cli">
+    Use Azure Developer CLI authentication for development scenarios
+  </Card>
+  
+  <Card title="Device Code" icon="mobile" href="/authentication/device-code">
+    Device code flow for environments without a browser
+  </Card>
+  
+  <Card title="Interactive Browser" icon="browser" href="/authentication/interactive-browser">
+    Interactive browser login for local development
+  </Card>
+</CardGroup>
+
+## Environment Variables
+
+The provider supports various environment variables for authentication and configuration. Using environment variables is recommended for sensitive information.
+
+### Common Variables
+
+| Name | Description | Used With |
+|------|-------------|-----------||
+| `M365_TENANT_ID` | The Microsoft Entra ID tenant ID | All authentication methods |
+| `M365_AUTH_METHOD` | The authentication method to use | All authentication methods |
+| `M365_CLIENT_ID` | The application (client) ID | Most authentication methods |
+
+### Authentication-Specific Variables
+
+| Name | Description | Used With |
+|------|-------------|-----------||
+| `M365_CLIENT_SECRET` | The client secret value | Client Secret |
+| `M365_CLIENT_CERTIFICATE_FILE_PATH` | Path to certificate file (.pfx) | Client Certificate |
+| `M365_CLIENT_CERTIFICATE_PASSWORD` | Password for the certificate | Client Certificate |
+| `M365_SEND_CERTIFICATE_CHAIN` | Send certificate chain (true/false) | Client Certificate |
+| `M365_USERNAME` | Username for authentication | Interactive Browser |
+| `M365_REDIRECT_URL` | Redirect URL for OAuth flows | Interactive Browser |
+| `M365_MANAGED_IDENTITY_ID` | User-assigned managed identity ID | Managed Identity |
+| `M365_OIDC_TOKEN_FILE_PATH` | Path to OIDC token file | OIDC |
+| `M365_OIDC_AUDIENCE` | Audience for OIDC tokens | OIDC, GitHub OIDC |
+| `M365_FEDERATED_TOKEN_FILE` | Path to Kubernetes service account token | Workload Identity |
+| `AZURE_FEDERATED_TOKEN_FILE` | Alternative for federated token path | Workload Identity |
+| `ACTIONS_ID_TOKEN_REQUEST_URL` | GitHub Actions OIDC URL (auto-injected) | GitHub OIDC |
+| `ACTIONS_ID_TOKEN_REQUEST_TOKEN` | GitHub Actions OIDC token (auto-injected) | GitHub OIDC |
+
+### Additional Configuration
+
+| Name | Description |
+|------|-------------|
+| `M365_ADDITIONALLY_ALLOWED_TENANTS` | Comma-separated list of allowed tenant IDs |
+| `M365_CLOUD` | Cloud environment (public, dod, gcc, gcchigh, china, ex, rx) |
+| `M365_DISABLE_INSTANCE_DISCOVERY` | Disable instance discovery (true/false) |
+| `M365_DEBUG_MODE` | Enable debug mode (true/false) |
+| `M365_TELEMETRY_OPTOUT` | Opt out of telemetry (true/false) |
+| `M365_USE_PROXY` | Enable proxy usage (true/false) |
+| `M365_PROXY_URL` | The URL of the proxy server |
+| `M365_PROXY_USERNAME` | Username for proxy authentication |
+| `M365_PROXY_PASSWORD` | Password for proxy authentication |
+
+<Note>
+Variables passed into the provider block will override the environment variables.
+</Note>
+
+## Cloud Environments
+
+The provider supports different Microsoft cloud environments:
+
+- `public` - Microsoft Azure Public Cloud (default)
+- `dod` - US Department of Defense (DoD) Cloud
+- `gcc` - US Government Cloud
+- `gcchigh` - US Government High Cloud
+- `china` - China Cloud
+- `ex` - EagleX Cloud
+- `rx` - Secure Cloud (RX)
+
+Set the environment using the `cloud` parameter or `M365_CLOUD` environment variable:
+
+```terraform
+provider "microsoft365" {
+  cloud = "gcc"
+  # ... other configuration ...
+}
+```
+
+## Choosing an Authentication Method
+
+### For Production Deployments
+
+**Recommended:** Client Certificate, Managed Identity, or OIDC
+
+- **Client Certificate**: More secure than client secrets, certificate-based authentication is ideal for long-running services
+- **Managed Identity**: Best for Azure-hosted applications (VMs, Container Instances) - no secrets to manage
+- **OIDC**: Modern, secure authentication for CI/CD pipelines (GitHub Actions, Azure DevOps)
+
+### For CI/CD Pipelines
+
+**Recommended:** OIDC (GitHub, Azure DevOps) or Client Secret
+
+- **GitHub OIDC**: No secrets in repository, automatic token exchange
+- **Azure DevOps OIDC**: Federated credentials via service connections
+- **Client Secret**: Traditional approach, requires secret management
+
+### For Local Development
+
+**Recommended:** Azure CLI, Azure Developer CLI, or Interactive Browser
+
+- **Azure CLI**: Leverage existing authentication, no app registration needed
+- **Azure Developer CLI**: Similar to Azure CLI, ideal for azd users
+- **Interactive Browser**: Browser-based login, good for testing
+- **Device Code**: Alternative when browser automation isn't possible
+
+### For Kubernetes Workloads
+
+**Recommended:** Workload Identity
+
+- **Workload Identity**: Federated authentication using Kubernetes service account tokens
+- Eliminates secrets in Kubernetes clusters
+- Aligns with zero-trust security principles
+
+## Security Best Practices
+
+<Warning>
+Never commit secrets, certificates, or tokens to version control. Always use environment variables or secure secret management solutions.
+</Warning>
+
+1. **Follow Least Privilege**: Only request the minimum required Microsoft Graph permissions
+2. **Rotate Credentials**: Regularly rotate client secrets and certificates
+3. **Use Modern Auth**: Prefer certificate-based or OIDC authentication over client secrets
+4. **Secure Storage**: Use secret managers (Azure Key Vault, HashiCorp Vault, GitHub Secrets)
+5. **Monitor Access**: Enable audit logging for authentication events
+6. **Conditional Access**: Implement conditional access policies in Microsoft Entra ID
+
+## Next Steps
+
+Select the authentication method that best fits your use case:
+
+- Review the specific guide for your chosen authentication method
+- Follow the setup instructions to configure the app registration
+- Test authentication in a development environment before deploying to production
+- Implement proper secret management and rotation procedures

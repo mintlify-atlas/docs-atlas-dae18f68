@@ -1,0 +1,404 @@
+---
+title: Device Enrollment
+description: Configure device enrollment policies, restrictions, and automation
+---
+
+Device enrollment resources enable you to control how devices join Microsoft Intune and configure the enrollment experience.
+
+## Available Resources
+
+<CardGroup cols={2}>
+  <Card title="Assignment Filter" icon="filter">
+    **Resource**: `microsoft365_graph_beta_device_management_assignment_filter`
+    
+    Create dynamic filters for policy assignments.
+  </Card>
+  
+  <Card title="Device Category" icon="tags">
+    **Resource**: `microsoft365_graph_beta_device_management_device_category`
+    
+    Organize devices into categories.
+  </Card>
+  
+  <Card title="Enrollment Configuration" icon="gear">
+    **Resource**: `microsoft365_graph_beta_device_management_device_enrollment_configuration`
+    
+    Configure enrollment restrictions and settings.
+  </Card>
+  
+  <Card title="Enrollment Limit" icon="ban">
+    **Resource**: `microsoft365_graph_beta_device_management_device_enrollment_limit_configuration`
+    
+    Limit number of devices per user.
+  </Card>
+</CardGroup>
+
+### Windows Autopilot
+
+<CardGroup cols={2}>
+  <Card title="Autopilot Deployment Profile" icon="windows">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_autopilot_deployment_profile`
+  </Card>
+  
+  <Card title="Autopilot Device Identity" icon="fingerprint">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_autopilot_device_identity`
+  </Card>
+  
+  <Card title="Autopilot Device CSV Import" icon="file-csv">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_autopilot_device_csv_import`
+  </Card>
+  
+  <Card title="Device Preparation Policy" icon="screwdriver-wrench">
+    **Resource**: `microsoft365_graph_beta_device_management_windows_autopilot_device_preparation_policy`
+  </Card>
+</CardGroup>
+
+### Apple Enrollment
+
+<CardGroup cols={2}>
+  <Card title="Apple Configurator Enrollment" icon="apple">
+    **Resource**: `microsoft365_graph_beta_device_management_apple_configurator_enrollment_policy`
+  </Card>
+  
+  <Card title="Apple User Enrollment" icon="user-plus">
+    **Resource**: `microsoft365_graph_beta_device_management_apple_user_initiated_enrollment_profile_assignment`
+  </Card>
+</CardGroup>
+
+### Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="Terms and Conditions" icon="file-contract">
+    **Resource**: `microsoft365_graph_beta_device_management_terms_and_conditions`
+  </Card>
+  
+  <Card title="Intune Branding" icon="palette">
+    **Resource**: `microsoft365_graph_beta_device_management_intune_branding_profile`
+  </Card>
+  
+  <Card title="Role Scope Tag" icon="tag">
+    **Resource**: `microsoft365_graph_beta_device_management_role_scope_tag`
+  </Card>
+</CardGroup>
+
+## Assignment Filter Example
+
+```hcl
+resource "microsoft365_graph_beta_device_management_assignment_filter" "windows_11_only" {
+  display_name = "Windows 11 Devices"
+  description  = "Filter for Windows 11 devices only"
+  platform     = "windows10AndLater"
+  
+  rule = "(device.osVersion -startsWith \"10.0.22\") or (device.osVersion -startsWith \"10.0.23\")"
+}
+
+resource "microsoft365_graph_beta_device_management_assignment_filter" "corporate_owned" {
+  display_name = "Corporate Owned Devices"
+  description  = "Filter for corporate-owned devices"
+  platform     = "windows10AndLater"
+  
+  rule = "(device.deviceOwnership -eq \"Corporate\")"
+}
+
+resource "microsoft365_graph_beta_device_management_assignment_filter" "specific_models" {
+  display_name = "Surface Devices"
+  description  = "Filter for Microsoft Surface devices"
+  platform     = "windows10AndLater"
+  
+  rule = "(device.model -startsWith \"Surface\")"
+}
+```
+
+## Device Category Example
+
+```hcl
+resource "microsoft365_graph_beta_device_management_device_category" "laptops" {
+  display_name = "Laptops"
+  description  = "Laptop devices"
+}
+
+resource "microsoft365_graph_beta_device_management_device_category" "desktops" {
+  display_name = "Desktops"
+  description  = "Desktop computers"
+}
+
+resource "microsoft365_graph_beta_device_management_device_category" "tablets" {
+  display_name = "Tablets"
+  description  = "Tablet devices"
+}
+```
+
+## Device Enrollment Limit
+
+```hcl
+resource "microsoft365_graph_beta_device_management_device_enrollment_limit_configuration" "standard_users" {
+  display_name = "Standard User Device Limit"
+  description  = "Limit standard users to 5 devices"
+  
+  limit = 5
+  
+  # Assignment
+  assignments = [
+    {
+      target = {
+        assignment_target_type = "allUsersAssignmentTarget"
+      }
+    }
+  ]
+}
+
+resource "microsoft365_graph_beta_device_management_device_enrollment_limit_configuration" "executives" {
+  display_name = "Executive Device Limit"
+  description  = "Allow executives up to 15 devices"
+  
+  limit = 15
+  
+  assignments = [
+    {
+      target = {
+        assignment_target_type = "groupAssignmentTarget"
+        group_id              = microsoft365_graph_beta_groups_group.executives.id
+      }
+    }
+  ]
+}
+```
+
+## Windows Autopilot Deployment Profile
+
+```hcl
+resource "microsoft365_graph_beta_device_management_windows_autopilot_deployment_profile" "standard" {
+  display_name = "Standard Autopilot Profile"
+  description  = "Standard deployment profile for corporate devices"
+  
+  # Out of Box Experience (OOBE)
+  out_of_box_experience_settings = {
+    hide_privacy_settings            = true
+    hide_eula                        = true
+    user_type                        = "standard"
+    device_usage_type                = "shared"
+    skip_keyboard_selection_page     = true
+    hide_escape_link                 = true
+  }
+  
+  # Enable white glove
+  enable_white_glove = true
+  
+  # Extract hardware hash
+  extract_hardware_hash = true
+  
+  # Assignment
+  assignments = [
+    {
+      target = {
+        group_assignment_target = {
+          group_id = microsoft365_graph_beta_groups_group.autopilot_devices.id
+        }
+      }
+    }
+  ]
+}
+```
+
+## Terms and Conditions
+
+```hcl
+resource "microsoft365_graph_beta_device_management_terms_and_conditions" "corporate_policy" {
+  display_name = "Corporate Device Policy"
+  description  = "Terms and conditions for corporate device enrollment"
+  
+  title = "Corporate Device Enrollment Agreement"
+  
+  body_text = <<-EOT
+    By enrolling your device, you agree to:
+    
+    1. Allow corporate policies to be applied to your device
+    2. Permit remote management by IT administrators
+    3. Install required security software
+    4. Comply with acceptable use policies
+    
+    The company reserves the right to remotely wipe corporate data if the device is lost or you leave the organization.
+  EOT
+  
+  acceptance_statement = "I have read and agree to the terms and conditions"
+  
+  # Versioning
+  version = 1
+}
+
+resource "microsoft365_graph_beta_device_management_terms_and_conditions_assignment" "all_users" {
+  terms_and_conditions_id = microsoft365_graph_beta_device_management_terms_and_conditions.corporate_policy.id
+  
+  target = {
+    assignment_target_type = "allUsersAssignmentTarget"
+  }
+}
+```
+
+## Intune Branding Profile
+
+```hcl
+resource "microsoft365_graph_beta_device_management_intune_branding_profile" "corporate" {
+  profile_name = "Corporate Branding"
+  profile_description = "Company branding for Company Portal"
+  
+  # Company information
+  display_name           = "Contoso IT"
+  contact_it_name        = "IT Helpdesk"
+  contact_it_phone_number = "+1-555-0100"
+  contact_it_email_address = "it-help@contoso.com"
+  
+  # Privacy information
+  privacy_url           = "https://contoso.com/privacy"
+  online_support_site_url = "https://support.contoso.com"
+  
+  # Theme colors
+  theme_color = "#0078D4"  # Microsoft Blue
+  
+  # Show in Company Portal
+  show_display_name_next_to_logo = true
+  show_logo = true
+}
+```
+
+## Enrollment Notifications
+
+```hcl
+resource "microsoft365_graph_beta_device_management_device_enrollment_notification" "welcome" {
+  display_name = "Enrollment Welcome Message"
+  
+  # Notification content
+  default_locale = "en-US"
+  
+  # Localized messages
+  localized_notification_messages = [
+    {
+      locale  = "en-US"
+      subject = "Welcome to Contoso!"
+      message_template = <<-EOT
+        Thank you for enrolling your device.
+        
+        Your device is now protected and ready to access corporate resources.
+        
+        If you need assistance, contact IT at it-help@contoso.com
+      EOT
+      is_default = true
+    }
+  ]
+}
+```
+
+## Role Scope Tags
+
+Control access to Intune objects:
+
+```hcl
+resource "microsoft365_graph_beta_device_management_role_scope_tag" "us_region" {
+  display_name = "US Region"
+  description  = "Resources for US region"
+}
+
+resource "microsoft365_graph_beta_device_management_role_scope_tag" "eu_region" {
+  display_name = "EU Region"
+  description  = "Resources for EU region"
+}
+
+resource "microsoft365_graph_beta_device_management_role_scope_tag" "sales_department" {
+  display_name = "Sales Department"
+  description  = "Resources for sales team"
+}
+```
+
+## Managed Device Cleanup Rule
+
+```hcl
+resource "microsoft365_graph_beta_device_management_managed_device_cleanup_rule" "inactive_devices" {
+  display_name = "Remove Inactive Devices"
+  description  = "Automatically remove devices that haven't checked in"
+  
+  # Remove after 90 days of inactivity
+  device_inactivity_before_retirement_in_days = 90
+}
+```
+
+## Device Enrollment Configuration
+
+```hcl
+resource "microsoft365_graph_beta_device_management_device_enrollment_configuration" "platform_restrictions" {
+  display_name = "Platform Restrictions"
+  description  = "Restrict enrollment to specific platforms"
+  
+  # Configure platform-specific restrictions
+  # ...
+}
+```
+
+## Filter Rule Syntax
+
+Common filter rule examples:
+
+```hcl
+# OS Version
+rule = "(device.osVersion -startsWith \"10.0.22\")"
+
+# Device Model
+rule = "(device.model -eq \"Surface Laptop 4\")"
+
+# Ownership
+rule = "(device.deviceOwnership -eq \"Corporate\")"
+
+# Multiple conditions (AND)
+rule = "(device.osVersion -startsWith \"10.0.22\") and (device.deviceOwnership -eq \"Corporate\")"
+
+# Multiple conditions (OR)
+rule = "(device.model -contains \"Surface\") or (device.model -contains \"Dell\")"
+
+# Enrollment profile
+rule = "(device.enrollmentProfileName -eq \"Autopilot\")"
+```
+
+## Import Syntax
+
+```bash
+# Assignment filter
+terraform import microsoft365_graph_beta_device_management_assignment_filter.filter <filter-id>
+
+# Device category
+terraform import microsoft365_graph_beta_device_management_device_category.category <category-id>
+
+# Autopilot profile
+terraform import microsoft365_graph_beta_device_management_windows_autopilot_deployment_profile.profile <profile-id>
+
+# Terms and conditions
+terraform import microsoft365_graph_beta_device_management_terms_and_conditions.terms <terms-id>
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use assignment filters for granular control">
+    Leverage assignment filters to target policies based on device attributes like OS version, model, or ownership.
+  </Accordion>
+
+  <Accordion title="Set appropriate enrollment limits">
+    Balance security with user needs. Higher limits for power users, lower for standard users.
+  </Accordion>
+
+  <Accordion title="Categorize devices for easier management">
+    Use device categories to organize devices and simplify policy targeting.
+  </Accordion>
+
+  <Accordion title="Customize the enrollment experience">
+    Use branding profiles to provide a professional, branded enrollment experience.
+  </Accordion>
+
+  <Accordion title="Implement terms and conditions">
+    Ensure users acknowledge policies before enrolling devices.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Compliance Policies](/resources/device-management/compliance-policies)
+- [Configuration Policies](/resources/device-management/configuration-policies)
+- [Windows Updates](/resources/device-management/windows-updates)

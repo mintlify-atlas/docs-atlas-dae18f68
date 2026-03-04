@@ -1,0 +1,153 @@
+---
+title: User Resources
+description: Manage user accounts in Azure AD
+---
+
+## Resources
+
+<Card title="User" icon="user">
+  **Resource**: `microsoft365_graph_beta_users_user`
+  
+  Create and manage user accounts in Azure AD.
+</Card>
+
+## Basic User
+
+```hcl
+resource "microsoft365_graph_beta_users_user" "employee" {
+  display_name        = "John Doe"
+  user_principal_name = "john.doe@contoso.com"
+  mail_nickname       = "johndoe"
+  account_enabled     = true
+  
+  password_profile = {
+    password                           = "SecurePassword123!"
+    force_change_password_next_sign_in = true
+  }
+}
+```
+
+## User with Full Details
+
+```hcl
+resource "microsoft365_graph_beta_users_user" "employee" {
+  display_name        = "Jane Smith"
+  user_principal_name = "jane.smith@contoso.com"
+  mail_nickname       = "janesmith"
+  account_enabled     = true
+  
+  given_name  = "Jane"
+  surname     = "Smith"
+  job_title   = "Software Engineer"
+  department  = "Engineering"
+  office_location = "Building 1, Floor 3"
+  
+  business_phones = ["+1-555-0100"]
+  mobile_phone    = "+1-555-0101"
+  
+  usage_location = "US"
+  
+  password_profile = {
+    password                           = "SecurePassword123!"
+    force_change_password_next_sign_in = true
+  }
+}
+```
+
+## User with Manager
+
+```hcl
+resource "microsoft365_graph_beta_users_user" "manager" {
+  display_name        = "Manager Name"
+  user_principal_name = "manager@contoso.com"
+  mail_nickname       = "manager"
+  account_enabled     = true
+  
+  password_profile = {
+    password = "SecurePassword123!"
+  }
+}
+
+resource "microsoft365_graph_beta_users_user" "employee" {
+  display_name        = "Employee Name"
+  user_principal_name = "employee@contoso.com"
+  mail_nickname       = "employee"
+  account_enabled     = true
+  
+  password_profile = {
+    password = "SecurePassword123!"
+  }
+}
+
+resource "microsoft365_graph_beta_users_user_manager" "relationship" {
+  user_id    = microsoft365_graph_beta_users_user.employee.id
+  manager_id = microsoft365_graph_beta_users_user.manager.id
+}
+```
+
+## User with Custom Security Attributes
+
+```hcl
+resource "microsoft365_graph_beta_users_user" "employee" {
+  display_name        = "John Doe"
+  user_principal_name = "john.doe@contoso.com"
+  mail_nickname       = "johndoe"
+  account_enabled     = true
+  
+  password_profile = {
+    password = "SecurePassword123!"
+  }
+  
+  custom_security_attributes = {
+    Organization = {
+      "@odata.type"  = "#microsoft.graph.customSecurityAttributeValue"
+      Department     = "Engineering"
+      ClearanceLevel = "Confidential"
+    }
+  }
+}
+```
+
+## User License Assignment
+
+```hcl
+resource "microsoft365_graph_beta_users_user_license_assignment" "m365" {
+  user_id = microsoft365_graph_beta_users_user.employee.id
+  
+  add_licenses = [
+    {
+      sku_id = "<microsoft-365-e5-sku-id>"
+      disabled_plans = []
+    }
+  ]
+}
+```
+
+## Mailbox Settings
+
+```hcl
+resource "microsoft365_graph_beta_users_user_mailbox_settings" "settings" {
+  user_id = microsoft365_graph_beta_users_user.employee.id
+  
+  time_zone = "Pacific Standard Time"
+  language = {
+    locale = "en-US"
+  }
+  
+  automatic_replies_setting = {
+    status = "disabled"
+  }
+}
+```
+
+## Import Syntax
+
+```bash
+terraform import microsoft365_graph_beta_users_user.user <user-object-id>
+```
+
+## Related Resources
+
+- [Groups](/resources/groups-users/groups)
+- [Membership](/resources/groups-users/membership)
+- [Custom Security Attributes](/resources/identity-access/custom-security-attributes)

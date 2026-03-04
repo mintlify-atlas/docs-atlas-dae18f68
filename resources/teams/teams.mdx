@@ -1,0 +1,56 @@
+---
+title: Teams Resources
+description: Create and manage Microsoft Teams
+---
+
+## Creating Teams
+
+Microsoft Teams are created from Microsoft 365 Groups. To create a team:
+
+1. Create a Microsoft 365 Group (Unified group)
+2. Enable Teams functionality on the group
+
+## Microsoft 365 Group for Teams
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "team" {
+  display_name     = "Engineering Team"
+  mail_nickname    = "engineering"
+  description      = "Engineering department collaboration"
+  mail_enabled     = true
+  security_enabled = false
+  
+  group_types = ["Unified"]
+  
+  visibility = "Private"  # or "Public"
+}
+```
+
+## Team Visibility
+
+| Visibility | Description |
+|------------|-------------|
+| `Private` | Only members can see and access the team |
+| `Public` | Anyone in the organization can discover and join |
+
+## Add Team Members
+
+```hcl
+# Add members
+resource "microsoft365_graph_beta_groups_group_member_assignment" "member" {
+  group_id  = microsoft365_graph_beta_groups_group.team.id
+  member_id = microsoft365_graph_beta_users_user.employee.id
+}
+
+# Add owner
+resource "microsoft365_graph_beta_groups_group_owner_assignment" "owner" {
+  group_id = microsoft365_graph_beta_groups_group.team.id
+  owner_id = microsoft365_graph_beta_users_user.manager.id
+}
+```
+
+## Related Resources
+
+- [Channels](/resources/teams/channels)
+- [Groups](/resources/groups-users/groups)
+- [Settings](/resources/teams/settings)

@@ -1,0 +1,283 @@
+---
+title: Managed Identity Authentication
+description: Credential-free authentication for Azure VMs and Container Instances
+---
+
+The Microsoft 365 provider can use Azure managed identities to authenticate to Microsoft 365 services. This authentication method eliminates the need for secrets when Terraform is running on Azure resources.
+
+<Warning>
+**Environment Requirement**
+
+This authentication method **only works when Terraform is executing on an Azure Virtual Machine or Container Instance** with managed identity enabled. It cannot be used for local development environments unless using Azure CLI as a fallback authentication method.
+</Warning>
+
+## How Managed Identity Works
+
+Managed identities provide Azure resources with an automatically managed identity in Microsoft Entra ID:
+
+<Steps>
+  <Step title="Enable Managed Identity">
+    Your Azure VM or Container Instance has a managed identity enabled
+  </Step>
+  
+  <Step title="Federation Setup">
+    This identity is federated with an app registration that has Microsoft 365 API permissions
+  </Step>
+  
+  <Step title="Token Acquisition">
+    When Terraform runs on the Azure resource, it obtains tokens using the managed identity
+  </Step>
+  
+  <Step title="API Authentication">
+    The provider uses these tokens to authenticate API calls to Microsoft 365 services
+  </Step>
+</Steps>
+
+### Types of Managed Identities
+
+<CardGroup cols={2}>
+  <Card title="System-assigned" icon="server">
+    Tied to the lifecycle of the Azure resource; deleted when the resource is deleted
+  </Card>
+  
+  <Card title="User-assigned" icon="user">
+    Created as standalone resources and assigned to one or more Azure resources; managed independently
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+- An Azure resource with managed identity enabled (VM, App Service, Function App, etc.)
+- Permissions to manage identities and role assignments in Azure
+- Access to create app registrations in Microsoft Entra ID
+
+## Setup
+
+### Enable Managed Identity on Azure Resource
+
+<Tabs>
+  <Tab title="Virtual Machine">
+    ```bash
+    # Enable system-assigned managed identity
+    az vm identity assign --name myVM --resource-group myResourceGroup
+    
+    # Or, assign a user-assigned managed identity
+    az vm identity assign \
+      --name myVM \
+      --resource-group myResourceGroup \
+      --identities /subscriptions/SUBSCRIPTION_ID/resourcegroups/RESOURCE_GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/IDENTITY_NAME
+    ```
+  </Tab>
+  
+  <Tab title="Container Instance">
+    ```bash
+    # Create a user-assigned managed identity
+    az identity create --name myContainerIdentity --resource-group myResourceGroup
+    
+    # Deploy container group with the identity
+    az container create \
+      --name myContainerGroup \
+      --resource-group myResourceGroup \
+      --image myImage \
+      --assign-identity /subscriptions/SUBSCRIPTION_ID/resourcegroups/RESOURCE_GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myContainerIdentity
+    ```
+  </Tab>
+</Tabs>
+
+### Create App Registration
+
+```bash
+# Create an app registration
+APP_ID=$(az ad app create --display-name "Microsoft365Provider" --query appId -o tsv)
+
+# Create service principal
+az ad sp create --id $APP_ID
+
+# Add Microsoft Graph API permissions
+az ad app permission add \
+  --id $APP_ID \
+  --api 00000003-0000-0000-c000-000000000000 \
+  --api-permissions 9241abd9-d0e6-425a-bd4f-47ba86e767a4=Role
+
+# Grant admin consent
+az ad app permission admin-consent --id $APP_ID
+```
+
+### Connect Managed Identity to App Registration
+
+```bash
+# Get the principal ID of the managed identity
+PRINCIPAL_ID=$(az vm identity show --name myVM --resource-group myResourceGroup --query principalId -o tsv)
+
+# Make the managed identity an owner of the app registration
+az ad app owner add --id $APP_ID --owner-object-id $PRINCIPAL_ID
+```
+
+<Tabs>
+  <Tab title="Using Terraform">
+    ```terraform
+    # Create a user-assigned managed identity
+    resource "azurerm_user_assigned_identity" "example" {
+      name                = "terraform-managed-identity"
+      resource_group_name = "my-resource-group"
+      location            = "eastus"
+    }
+    
+    # Create app registration
+    resource "azuread_application" "example" {
+      display_name = "Microsoft365Provider"
+    }
+    
+    # Create service principal
+    resource "azuread_service_principal" "example" {
+      application_id = azuread_application.example.application_id
+    }
+    
+    # Add Microsoft Graph permissions
+    resource "azuread_application_api_permission" "example" {
+      application_object_id = azuread_application.example.object_id
+      api_id = "00000003-0000-0000-c000-000000000000"
+      
+      api_permissions {
+        id   = "9241abd9-d0e6-425a-bd4f-47ba86e767a4"
+        type = "Role"
+      }
+    }
+    
+    # Configure federated credentials
+    resource "azuread_application_federated_identity_credential" "example" {
+      application_object_id = azuread_application.example.object_id
+      display_name          = "TerraformManagedIdentity"
+      description           = "Federated credential for Terraform managed identity"
+      audiences             = ["api://AzureADTokenExchange"]
+      issuer                = "https://login.microsoftonline.com/${data.azurerm_client_config.current.tenant_id}/v2.0"
+      subject               = azurerm_user_assigned_identity.example.principal_id
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Provider Configuration
+
+<Tabs>
+  <Tab title="System-assigned Identity">
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "managed_identity"
+      tenant_id   = "00000000-0000-0000-0000-000000000000"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="User-assigned Identity">
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "managed_identity"
+      tenant_id   = "00000000-0000-0000-0000-000000000000"
+      entra_id_options = {
+        # Specify either client ID or resource ID
+        managed_identity_id = "00000000-0000-0000-0000-000000000000" # Client ID
+        # OR
+        # managed_identity_id = "/subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/IDENTITY_NAME"
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Environment Variables">
+    ```bash
+    export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_AUTH_METHOD="managed_identity"
+    
+    # For user-assigned identity (optional)
+    export M365_MANAGED_IDENTITY_ID="00000000-0000-0000-0000-000000000000"
+    # Or using Azure SDK variable
+    export AZURE_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+    ```
+    
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "managed_identity"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Valid Use Cases
+
+Managed identity authentication is **only valid** for:
+
+<CardGroup cols={2}>
+  <Card title="Azure VMs" icon="server">
+    Terraform running on Azure Virtual Machines
+  </Card>
+  
+  <Card title="Container Instances" icon="container">
+    Terraform running on Azure Container Instances
+  </Card>
+  
+  <Card title="DevOps Agents" icon="robot">
+    Azure DevOps self-hosted agents on Azure VMs
+  </Card>
+  
+  <Card title="CI/CD on Azure" icon="code-branch">
+    CI/CD pipelines running on Azure VMs or containers
+  </Card>
+</CardGroup>
+
+## Invalid Use Cases
+
+This authentication method **will not work** for:
+
+- Local development environments
+- Non-Azure hosted CI/CD pipelines (GitHub Actions, Jenkins, etc.)
+- Any environment outside the Azure ecosystem
+
+## Advantages
+
+<CardGroup cols={2}>
+  <Card title="No Secrets" icon="key-skeleton">
+    No secrets to manage or rotate
+  </Card>
+  
+  <Card title="Auto-managed" icon="rotate">
+    Azure automatically manages identity lifecycle
+  </Card>
+  
+  <Card title="Reduced Risk" icon="shield-check">
+    Reduced risk of credential exposure
+  </Card>
+  
+  <Card title="Simplified Ops" icon="gears">
+    Simplified operations and management
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+- Only works when running Terraform on Azure VMs or Container Instances
+- Not available for local development unless using Azure CLI login as fallback
+- System-assigned identities are tied to the lifecycle of the Azure resource
+- Not suitable for other Azure services like App Services, Azure Functions, or Azure Automation
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Managed identity not available">
+    Verify the managed identity is properly enabled on your Azure resource. Check that the identity exists and is assigned.
+  </Accordion>
+  
+  <Accordion title="Identity not authorized">
+    Ensure the managed identity has the necessary permissions assigned to the app registration.
+  </Accordion>
+  
+  <Accordion title="Token acquisition failed">
+    Check if your resource has network restrictions preventing token acquisition from the Azure Instance Metadata Service (IMDS).
+  </Accordion>
+  
+  <Accordion title="User-assigned identity not found">
+    Verify the ID format and that the identity exists and is attached to your resource.
+  </Accordion>
+</AccordionGroup>

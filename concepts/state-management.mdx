@@ -1,0 +1,856 @@
+---
+title: State Management
+description: Understanding Terraform state for Microsoft 365 resources, handling sensitive data, remote state, and state locking
+---
+
+Terraform state is a critical component that maps your configuration to real Microsoft 365 resources. This guide explains how state works with the Microsoft 365 provider, best practices for securing sensitive data, and strategies for managing state in team environments.
+
+## Understanding Terraform State
+
+Terraform state is a JSON file (`terraform.tfstate`) that stores:
+
+- **Resource mappings**: Links Terraform resource names to Microsoft 365 resource IDs
+- **Metadata**: Resource attributes, dependencies, and provider configuration  
+- **Cached values**: Current state of resources to detect drift and changes
+- **Sensitive data**: Credentials, secrets, and other confidential information
+
+### State File Example
+
+```json
+{
+  "version": 4,
+  "terraform_version": "1.14.0",
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "microsoft365_graph_beta_groups_group",
+      "name": "engineering",
+      "provider": "provider[\"registry.terraform.io/deploymenttheory/microsoft365\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "12345678-1234-1234-1234-123456789abc",
+            "display_name": "Engineering Team",
+            "mail_nickname": "engineering-team",
+            "security_enabled": true
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+<Warning>
+State files contain **sensitive data** in plaintext, including client secrets, passwords, and access tokens. Never commit state files to version control without encryption.
+</Warning>
+
+## Local State Management
+
+### Default Local Backend
+
+By default, Terraform stores state locally in `terraform.tfstate`:
+
+```hcl
+# No backend configuration = local state
+terraform {
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"
+    }
+  }
+}
+
+provider "microsoft365" {
+  # ... provider configuration ...
+}
+```
+
+State is stored in the current working directory:
+
+```bash
+.
+├── main.tf
+├── terraform.tfstate          # Current state
+└── terraform.tfstate.backup   # Previous state
+```
+
+### Local State Best Practices
+
+<AccordionGroup>
+  <Accordion title="Add state files to .gitignore">
+    Prevent accidental commits:
+    
+    ```bash .gitignore
+    # Terraform state files
+    *.tfstate
+    *.tfstate.*
+    *.tfstate.backup
+    
+    # Terraform variable files (may contain secrets)
+    *.tfvars
+    *.tfvars.json
+    
+    # Terraform directories
+    .terraform/
+    .terraform.lock.hcl
+    ```
+  </Accordion>
+  
+  <Accordion title="Encrypt state at rest">
+    Use operating system encryption:
+    
+    **Windows:** BitLocker drive encryption
+    ```powershell
+    # Enable BitLocker
+    Enable-BitLocker -MountPoint "C:" -EncryptionMethod XtsAes256
+    ```
+    
+    **macOS:** FileVault disk encryption
+    ```bash
+    # Enable FileVault
+    sudo fdesetup enable
+    ```
+    
+    **Linux:** LUKS disk encryption
+    ```bash
+    # Encrypt partition
+    cryptsetup luksFormat /dev/sdX
+    ```
+  </Accordion>
+  
+  <Accordion title="Backup state regularly">
+    Create versioned backups:
+    
+    ```bash
+    #!/bin/bash
+    # Backup script
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    cp terraform.tfstate "backups/terraform.tfstate.${TIMESTAMP}"
+    
+    # Keep only last 10 backups
+    ls -t backups/terraform.tfstate.* | tail -n +11 | xargs rm -f
+    ```
+  </Accordion>
+  
+  <Accordion title="Limit access to state files">
+    Restrict file permissions:
+    
+    ```bash
+    # Linux/macOS - owner read/write only
+    chmod 600 terraform.tfstate
+    
+    # Windows - remove inheritance and grant access only to current user
+    icacls terraform.tfstate /inheritance:r
+    icacls terraform.tfstate /grant:r "%USERNAME%:(R,W)"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### When to Use Local State
+
+Local state is suitable for:
+- Individual development environments
+- Learning and experimentation
+- Small personal projects
+- Isolated test environments
+
+<Warning>
+Local state is **NOT recommended** for:
+- Team collaboration (risk of conflicts)
+- Production environments (no disaster recovery)
+- CI/CD pipelines (ephemeral runners)
+- Multi-user scenarios (no locking)
+</Warning>
+
+## Remote State Management
+
+Remote state backends store state in a shared location with locking, encryption, and versioning.
+
+### Azure Storage Backend
+
+Store state in Azure Blob Storage with automatic locking:
+
+```hcl
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "terraform-state-rg"
+    storage_account_name = "tfstatecontoso"
+    container_name       = "tfstate"
+    key                  = "microsoft365.tfstate"
+    
+    # Optional: Use managed identity for authentication
+    use_azuread_auth = true
+  }
+  
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"
+    }
+  }
+}
+```
+
+**Setup Azure Storage:**
+
+```bash
+# Create resource group
+az group create --name terraform-state-rg --location eastus
+
+# Create storage account
+az storage account create \
+  --name tfstatecontoso \
+  --resource-group terraform-state-rg \
+  --location eastus \
+  --sku Standard_LRS \
+  --encryption-services blob \
+  --https-only true \
+  --min-tls-version TLS1_2
+
+# Create blob container
+az storage container create \
+  --name tfstate \
+  --account-name tfstatecontoso \
+  --auth-mode login
+
+# Enable versioning
+az storage account blob-service-properties update \
+  --account-name tfstatecontoso \
+  --resource-group terraform-state-rg \
+  --enable-versioning true
+
+# Enable soft delete
+az storage account blob-service-properties update \
+  --account-name tfstatecontoso \
+  --resource-group terraform-state-rg \
+  --enable-delete-retention true \
+  --delete-retention-days 30
+```
+
+### Terraform Cloud Backend
+
+Use Terraform Cloud for managed state with collaboration features:
+
+```hcl
+terraform {
+  cloud {
+    organization = "contoso"
+    
+    workspaces {
+      name = "microsoft365-production"
+    }
+  }
+  
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"
+    }
+  }
+}
+```
+
+**Setup:**
+
+```bash
+# Login to Terraform Cloud
+terraform login
+
+# Initialize
+terraform init
+```
+
+### AWS S3 Backend
+
+Store state in S3 with DynamoDB locking:
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "terraform-state-contoso"
+    key            = "microsoft365/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-state-lock"
+    
+    # Server-side encryption
+    kms_key_id = "arn:aws:kms:us-east-1:ACCOUNT:key/KEY-ID"
+  }
+  
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"
+    }
+  }
+}
+```
+
+### HashiCorp Consul Backend
+
+Store state in Consul with automatic locking:
+
+```hcl
+terraform {
+  backend "consul" {
+    address = "consul.contoso.com:8500"
+    scheme  = "https"
+    path    = "terraform/microsoft365"
+    
+    # Optional: Use Consul ACL token
+    # access_token = "consul-token"
+  }
+}
+```
+
+### Backend Comparison
+
+| Backend | State Locking | Encryption | Versioning | Cost | Best For |
+|---------|---------------|------------|------------|------|----------|
+| **Azure Storage** | ✅ (native) | ✅ | ✅ | Low | Azure-centric orgs |
+| **Terraform Cloud** | ✅ | ✅ | ✅ | Free/Paid | Teams, collaboration |
+| **AWS S3** | ✅ (DynamoDB) | ✅ | ✅ | Low | AWS-centric orgs |
+| **Consul** | ✅ | ⚠️ (manual) | ❌ | Medium | On-premises |
+| **Local** | ❌ | ⚠️ (manual) | ❌ | Free | Development only |
+
+## State Locking
+
+State locking prevents concurrent operations that could corrupt state.
+
+### How Locking Works
+
+<Steps>
+  <Step title="Acquire Lock">
+    Terraform attempts to acquire a lock before any operation
+  </Step>
+  <Step title="Perform Operation">
+    If lock acquired, Terraform proceeds with the operation
+  </Step>
+  <Step title="Release Lock">
+    After completion (success or failure), lock is released
+  </Step>
+  <Step title="Wait or Fail">
+    If lock is held by another process, Terraform waits or fails
+  </Step>
+</Steps>
+
+### Locking Example
+
+```bash
+# Terminal 1 - starts terraform apply
+$ terraform apply
+Acquiring state lock. This may take a few moments...
+# Lock acquired, operation in progress
+
+# Terminal 2 - tries concurrent apply
+$ terraform apply
+Acquiring state lock. This may take a few moments...
+
+Error: Error acquiring the state lock
+
+Lock Info:
+  ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890
+  Path:      tfstate/microsoft365.tfstate
+  Operation: OperationTypeApply
+  Who:       user@hostname
+  Created:   2026-03-04 10:30:00.000000 UTC
+```
+
+### Force Unlock (Emergency Only)
+
+<Warning>
+Only force unlock if you're certain no other process is running. Forcing unlock during an active operation can corrupt state.
+</Warning>
+
+```bash
+# Force unlock using lock ID from error message
+terraform force-unlock a1b2c3d4-e5f6-7890-abcd-ef1234567890
+
+# Confirm when prompted
+Do you really want to force-unlock?
+  yes
+```
+
+## Sensitive Data in State
+
+State files contain sensitive information that must be protected.
+
+### What's Stored as Sensitive
+
+The Microsoft 365 provider marks these as sensitive:
+
+**Credentials:**
+- Client secrets
+- Client certificate passwords  
+- User passwords
+- Password profiles
+- API keys and tokens
+
+**Application secrets:**
+- Application password credentials
+- Certificate credentials
+- Federated identity credentials
+
+**User data:**
+- Password profiles and hashes
+- Security questions
+- Recovery keys
+
+### Sensitive Attribute Example
+
+```hcl
+resource "microsoft365_graph_beta_users_user" "service_account" {
+  display_name        = "API Service Account"
+  user_principal_name = "api-svc@contoso.com"
+  account_enabled     = true
+  
+  password_profile = {
+    password                           = "SecurePassword123!"  # Marked sensitive
+    force_change_password_next_sign_in = false
+  }
+}
+```
+
+In state file (plaintext):
+
+```json
+{
+  "password_profile": {
+    "password": "SecurePassword123!",
+    "force_change_password_next_sign_in": false
+  }
+}
+```
+
+<Warning>
+Even though Terraform marks attributes as `sensitive` in output, they are **still stored in plaintext** in the state file. Sensitive marking only prevents displaying values in terminal output.
+</Warning>
+
+### Protecting Sensitive State Data
+
+<AccordionGroup>
+  <Accordion title="1. Use encrypted remote backends">
+    Enable encryption for remote backends:
+    
+    **Azure Storage:**
+    ```hcl
+    backend "azurerm" {
+      # Azure Storage encrypts at rest by default
+      encryption_scope = "terraform-state-scope"
+    }
+    ```
+    
+    **AWS S3:**
+    ```hcl
+    backend "s3" {
+      encrypt    = true
+      kms_key_id = "arn:aws:kms:region:account:key/key-id"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="2. Implement RBAC for state access">
+    Restrict who can read/write state:
+    
+    **Azure Storage:**
+    ```bash
+    # Grant specific users/groups access
+    az role assignment create \
+      --role "Storage Blob Data Contributor" \
+      --assignee user@contoso.com \
+      --scope /subscriptions/SUB_ID/resourceGroups/terraform-state-rg/providers/Microsoft.Storage/storageAccounts/tfstate
+    ```
+    
+    **Terraform Cloud:**
+    - Use team-based permissions
+    - Require 2FA for sensitive workspaces
+    - Audit access logs regularly
+  </Accordion>
+  
+  <Accordion title="3. Enable versioning and soft delete">
+    Protect against accidental deletion or corruption:
+    
+    **Azure Storage:**
+    ```bash
+    # Enable blob versioning
+    az storage account blob-service-properties update \
+      --account-name tfstate \
+      --resource-group terraform-state-rg \
+      --enable-versioning true
+    
+    # Enable soft delete (30-day retention)
+    az storage account blob-service-properties update \
+      --account-name tfstate \
+      --resource-group terraform-state-rg \
+      --enable-delete-retention true \
+      --delete-retention-days 30
+    ```
+  </Accordion>
+  
+  <Accordion title="4. Audit state access">
+    Monitor who accesses state:
+    
+    **Azure Storage:**
+    ```bash
+    # Enable diagnostic logging
+    az monitor diagnostic-settings create \
+      --resource /subscriptions/SUB/resourceGroups/terraform-state-rg/providers/Microsoft.Storage/storageAccounts/tfstate \
+      --name state-access-logs \
+      --logs '[{"category":"StorageRead","enabled":true},{"category":"StorageWrite","enabled":true}]' \
+      --workspace /subscriptions/SUB/resourceGroups/monitoring/providers/Microsoft.OperationalInsights/workspaces/logs
+    ```
+  </Accordion>
+  
+  <Accordion title="5. Use external secret management">
+    Avoid storing secrets in configuration:
+    
+    ```hcl
+    # Instead of hardcoding passwords
+    # password = "SecurePassword123!"
+    
+    # Retrieve from Azure Key Vault
+    data "azurerm_key_vault_secret" "admin_password" {
+      name         = "admin-password"
+      key_vault_id = data.azurerm_key_vault.terraform.id
+    }
+    
+    resource "microsoft365_graph_beta_users_user" "admin" {
+      password_profile = {
+        password = data.azurerm_key_vault_secret.admin_password.value
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## State Operations
+
+### Viewing State
+
+```bash
+# List all resources in state
+terraform state list
+
+# Show specific resource details
+terraform state show microsoft365_graph_beta_groups_group.engineering
+
+# Output state as JSON
+terraform show -json
+```
+
+### Modifying State
+
+<Warning>
+Directly modifying state is dangerous. Always backup state before manual modifications.
+</Warning>
+
+**Remove resource from state:**
+```bash
+# Remove resource from state (doesn't delete from M365)
+terraform state rm microsoft365_graph_beta_groups_group.old_group
+```
+
+**Move resource in state:**
+```bash
+# Rename resource in state
+terraform state mv \
+  microsoft365_graph_beta_groups_group.old_name \
+  microsoft365_graph_beta_groups_group.new_name
+```
+
+**Import resource into state:**
+```bash
+# Add existing M365 resource to state
+terraform import microsoft365_graph_beta_groups_group.imported \
+  12345678-1234-1234-1234-123456789abc
+```
+
+### Replacing Resources
+
+```bash
+# Mark resource for replacement on next apply
+terraform apply -replace=microsoft365_graph_beta_groups_group.engineering
+
+# Deprecated alternative (still works)
+terraform taint microsoft365_graph_beta_groups_group.engineering
+terraform apply
+```
+
+## State Refresh and Drift
+
+Terraform detects configuration drift by comparing state to actual resources.
+
+### Automatic Refresh
+
+By default, `terraform plan` and `terraform apply` refresh state:
+
+```bash
+# Plan with automatic refresh
+terraform plan
+# Refreshing state...
+# microsoft365_graph_beta_groups_group.engineering: Refreshing state...
+```
+
+### Manual Refresh
+
+```bash
+# Explicitly refresh state without applying changes
+terraform refresh
+
+# Or use apply with refresh-only mode
+terraform apply -refresh-only
+```
+
+### Detect Drift
+
+When configuration drift is detected:
+
+```bash
+$ terraform plan
+
+microsoft365_graph_beta_groups_group.engineering: Refreshing state...
+
+Note: Objects have changed outside of Terraform
+
+Terraform detected the following changes made outside of Terraform:
+
+  # microsoft365_graph_beta_groups_group.engineering has changed
+  ~ resource "microsoft365_graph_beta_groups_group" "engineering" {
+        id              = "12345678-1234-1234-1234-123456789abc"
+      ~ description     = "Engineering team members" -> "Updated description"
+        # (other attributes unchanged)
+    }
+
+Plan: 0 to add, 1 to change, 0 to destroy.
+```
+
+See [Drift Detection](/concepts/drift-detection) for detailed guidance on handling drift.
+
+## Team Collaboration
+
+### Workflow Best Practices
+
+<Steps>
+  <Step title="Use remote state backend">
+    Configure Azure Storage, Terraform Cloud, or S3 backend
+  </Step>
+  <Step title="Enable state locking">
+    Ensure backend supports locking to prevent conflicts
+  </Step>
+  <Step title="Implement RBAC">
+    Control who can read/write state and run operations
+  </Step>
+  <Step title="Use workspaces or separate states">
+    Isolate development, staging, and production environments
+  </Step>
+  <Step title="Document state location">
+    Ensure team knows where state is stored and how to access it
+  </Step>
+</Steps>
+
+### Multiple Environments
+
+**Option 1: Separate state files**
+
+```hcl
+# Production state
+backend "azurerm" {
+  container_name = "tfstate"
+  key            = "production/microsoft365.tfstate"
+}
+
+# Development state
+backend "azurerm" {
+  container_name = "tfstate"
+  key            = "development/microsoft365.tfstate"
+}
+```
+
+**Option 2: Terraform workspaces**
+
+```bash
+# Create workspaces
+terraform workspace new production
+terraform workspace new development
+
+# Switch between workspaces
+terraform workspace select production
+terraform workspace select development
+
+# List workspaces
+terraform workspace list
+```
+
+## Disaster Recovery
+
+### State Backup Strategy
+
+<AccordionGroup>
+  <Accordion title="Automated backups">
+    Configure automatic state backups:
+    
+    ```bash
+    #!/bin/bash
+    # Automated state backup script
+    
+    # Pull current state
+    terraform state pull > "backups/terraform.tfstate.$(date +%Y%m%d_%H%M%S)"
+    
+    # Upload to backup location
+    az storage blob upload \
+      --account-name tfbackups \
+      --container-name state-backups \
+      --file "backups/terraform.tfstate.$(date +%Y%m%d_%H%M%S)" \
+      --name "microsoft365/terraform.tfstate.$(date +%Y%m%d_%H%M%S)"
+    
+    # Retain backups for 90 days
+    find backups/ -name "terraform.tfstate.*" -mtime +90 -delete
+    ```
+  </Accordion>
+  
+  <Accordion title="State recovery">
+    Restore from backup:
+    
+    ```bash
+    # List available backups
+    az storage blob list \
+      --account-name tfstate \
+      --container-name tfstate \
+      --prefix microsoft365.tfstate \
+      --query "[].{name:name, lastModified:properties.lastModified}"
+    
+    # Download specific version
+    az storage blob download \
+      --account-name tfstate \
+      --container-name tfstate \
+      --name "microsoft365.tfstate" \
+      --version-id "2026-03-04T10:00:00.0000000Z" \
+      --file terraform.tfstate.backup
+    
+    # Restore state
+    terraform state push terraform.tfstate.backup
+    ```
+  </Accordion>
+  
+  <Accordion title="Point-in-time recovery">
+    Use blob versioning for point-in-time recovery:
+    
+    ```bash
+    # List all versions
+    az storage blob list \
+      --account-name tfstate \
+      --container-name tfstate \
+      --prefix microsoft365.tfstate \
+      --include v \
+      --query "[].{version:versionId, modified:properties.lastModified}"
+    
+    # Restore specific version
+    az storage blob download \
+      --account-name tfstate \
+      --container-name tfstate \
+      --name "microsoft365.tfstate" \
+      --version-id "VERSION_ID" \
+      --file terraform.tfstate
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### State Lock Timeout
+
+**Problem:** Lock acquisition times out
+
+```bash
+Error: Error acquiring the state lock
+Timeout while waiting for state lock
+```
+
+**Solutions:**
+1. Verify no other Terraform process is running
+2. Check backend connectivity
+3. Force unlock if certain no process is active (see warning above)
+4. Increase lock timeout:
+
+```bash
+TF_LOCK_TIMEOUT=10m terraform apply
+```
+
+### State Desynchronization
+
+**Problem:** State doesn't match reality
+
+**Solutions:**
+1. Refresh state:
+   ```bash
+   terraform refresh
+   ```
+
+2. Import missing resources:
+   ```bash
+   terraform import microsoft365_graph_beta_groups_group.missing <id>
+   ```
+
+3. Remove deleted resources from state:
+   ```bash
+   terraform state rm microsoft365_graph_beta_groups_group.deleted
+   ```
+
+### Corrupted State
+
+**Problem:** State file is corrupted or invalid
+
+**Solutions:**
+1. Restore from backup (see Disaster Recovery)
+2. Restore from remote backend version history
+3. Rebuild state by importing all resources (last resort)
+
+## Best Practices Summary
+
+1. **Never commit state to version control**
+   - Add `*.tfstate*` to `.gitignore`
+   - Use remote backends for teams
+
+2. **Always use remote state for teams**
+   - Enable state locking
+   - Encrypt state at rest and in transit
+   - Implement RBAC
+
+3. **Protect sensitive data**
+   - Use encrypted backends
+   - Restrict state file access
+   - Audit state access logs
+   - Consider external secret management
+
+4. **Backup state regularly**
+   - Enable versioning on remote backends
+   - Automated backup scripts
+   - Test restore procedures
+
+5. **Handle state carefully**
+   - Backup before manual modifications
+   - Use `terraform state` commands instead of editing JSON
+   - Document state operations
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Drift Detection" icon="rotate" href="/concepts/drift-detection">
+    Learn how to detect and resolve configuration drift
+  </Card>
+  
+  <Card title="Resource Management" icon="sitemap" href="/concepts/resource-management">
+    Understand CRUD operations and lifecycle management
+  </Card>
+  
+  <Card title="CI/CD Integration" icon="arrows-rotate" href="/reference/examples">
+    Set up automated Terraform workflows
+  </Card>
+  
+  <Card title="Security Best Practices" icon="shield" href="/authentication/overview">
+    Implement secure authentication and authorization
+  </Card>
+</CardGroup>

@@ -1,0 +1,410 @@
+---
+title: Development Guide
+description: Developer guide for building new resources and contributing to the Microsoft 365 Terraform Provider
+---
+
+This guide describes the recommended workflow and best practices for developing new resources for the Community Terraform Provider for Microsoft 365.
+
+## Typical Development Workflow
+
+### 1. Understand the Microsoft Graph API
+
+Before implementing a resource, thoroughly understand the underlying API:
+
+<Steps>
+  <Step title="Read the Official Documentation">
+    - Review [Microsoft Graph v1.0](https://learn.microsoft.com/en-us/graph/api/overview?view=graph-rest-1.0) or [Microsoft Graph beta](https://learn.microsoft.com/en-us/graph/api/overview?view=graph-rest-beta) documentation
+    - Understand the resource schema, required fields, and API endpoints
+    - Note any special behaviors or limitations
+  </Step>
+
+  <Step title="Use Graph X-Ray for API Discovery">
+    - Use [Graph X-Ray](https://graphxray.merill.net/) (set to Go language) to observe API calls made by the Microsoft 365 portal
+    - Identify the exact endpoints, request bodies, and response formats
+    - Understand how the GUI interacts with the API
+  </Step>
+
+  <Step title="Determine API Version">
+    - Prefer v1.0 endpoints for stable features
+    - Use beta endpoints only when necessary for preview features
+    - Import the appropriate Microsoft Graph SDK:
+      ```go
+      import (
+          "github.com/microsoftgraph/msgraph-sdk-go"
+          "github.com/microsoftgraph/msgraph-beta-sdk-go"
+      )
+      ```
+  </Step>
+</Steps>
+
+### 2. Design the Data Model
+
+Define a Go struct representing the Terraform resource model:
+
+```go
+type ResourceTemplateResourceModel struct {
+    ID       types.String   `tfsdk:"id"`
+    Name     types.String   `tfsdk:"name"`
+    Enabled  types.Bool     `tfsdk:"enabled"`
+    Timeouts timeouts.Value `tfsdk:"timeouts"` // Always include timeouts
+}
+```
+
+<Note>
+  Always name the model following the pattern `ResourceNameResourceModel`.
+</Note>
+
+### 3. Implement CRUD Operations
+
+Implement Create, Read, Update, and Delete methods for the resource.
+
+<AccordionGroup>
+  <Accordion title="Create Operation">
+    ```go
+    // Create handles the Create operation for the resource.
+    // - Retrieves the plan
+    // - Constructs the request body using a helper
+    // - Calls the API
+    // - Handles errors and sets state
+    func (r *ResourceTemplateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+        var plan ResourceTemplateResourceModel
+        resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+        if resp.Diagnostics.HasError() { return }
+
+        ctx, cancel := crud.HandleTimeout(ctx, plan.Timeouts.Create, CreateTimeout*time.Second, &resp.Diagnostics)
+        if cancel == nil { return }
+        defer cancel()
+
+        requestBody, err := constructResource(ctx, &plan)
+        if err != nil {
+            resp.Diagnostics.AddError("Error constructing resource", err.Error())
+            return
+        }
+
+        resource, err := r.client.
+            DeviceManagement().
+            ResourceTemplates().
+            Post(ctx, requestBody, nil)
+        if err != nil {
+            errors.HandleKiotaGraphError(ctx, err, resp, constants.TfOperationCreate, r.WritePermissions)
+            return
+        }
+
+        plan.ID = types.StringValue(*resource.GetId())
+        resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+        if resp.Diagnostics.HasError() { return }
+
+        // Call Read with retry to get the initial resource state
+        readReq := resource.ReadRequest{State: resp.State, ProviderMeta: req.ProviderMeta}
+        stateContainer := &crud.CreateResponseContainer{CreateResponse: resp}
+        opts := crud.DefaultReadWithRetryOptions()
+        opts.Operation = constants.TfOperationCreate
+        opts.ResourceTypeName = ResourceName
+        err = crud.ReadWithRetry(ctx, r.Read, readReq, stateContainer, opts)
+        if err != nil {
+            resp.Diagnostics.AddError("Error reading resource state after create", err.Error())
+            return
+        }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Read Operation">
+    ```go
+    // Read handles the Read operation for the resource.
+    // - Retrieves the state
+    // - Calls the API to get the latest data
+    // - Maps the API response to Terraform state
+    func (r *ResourceTemplateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+        var state ResourceTemplateResourceModel
+        resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+        if resp.Diagnostics.HasError() { return }
+
+        ctx, cancel := crud.HandleTimeout(ctx, state.Timeouts.Read, ReadTimeout*time.Second, &resp.Diagnostics)
+        if cancel == nil { return }
+        defer cancel()
+
+        resource, err := r.client.
+            DeviceManagement().
+            ResourceTemplates().
+            ByResourceTemplateId(state.ID.ValueString()).
+            Get(ctx, nil)
+        if err != nil {
+            errors.HandleKiotaGraphError(ctx, err, resp, constants.TfOperationRead, r.ReadPermissions)
+            return
+        }
+
+        mapRemoteStateToTerraform(ctx, &state, resource)
+        resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Update Operation">
+    ```go
+    // Update handles the Update operation for the resource.
+    // - Retrieves the plan
+    // - Constructs the request body using a helper
+    // - Calls the API
+    // - Handles errors and refreshes state
+    func (r *ResourceTemplateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+        var plan ResourceTemplateResourceModel
+        resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+        if resp.Diagnostics.HasError() { return }
+
+        ctx, cancel := crud.HandleTimeout(ctx, plan.Timeouts.Update, UpdateTimeout*time.Second, &resp.Diagnostics)
+        if cancel == nil { return }
+        defer cancel()
+
+        requestBody, err := constructResource(ctx, &plan)
+        if err != nil {
+            resp.Diagnostics.AddError("Error constructing resource for update", err.Error())
+            return
+        }
+
+        _, err = r.client.
+            DeviceManagement().
+            ResourceTemplates().
+            ByResourceTemplateId(plan.ID.ValueString()).
+            Patch(ctx, requestBody, nil)
+        if err != nil {
+            errors.HandleKiotaGraphError(ctx, err, resp, constants.TfOperationUpdate, r.WritePermissions)
+            return
+        }
+
+        // Call Read with retry to get the updated resource state
+        readReq := resource.ReadRequest{State: resp.State, ProviderMeta: req.ProviderMeta}
+        stateContainer := &crud.UpdateResponseContainer{UpdateResponse: resp}
+        opts := crud.DefaultReadWithRetryOptions()
+        opts.Operation = constants.TfOperationUpdate
+        opts.ResourceTypeName = ResourceName
+        err = crud.ReadWithRetry(ctx, r.Read, readReq, stateContainer, opts)
+        if err != nil {
+            resp.Diagnostics.AddError("Error reading resource state after update", err.Error())
+            return
+        }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Delete Operation">
+    ```go
+    // Delete handles the Delete operation for the resource.
+    // - Retrieves the state
+    // - Calls the API to delete the resource
+    // - Handles errors and removes state
+    func (r *ResourceTemplateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+        var data ResourceTemplateResourceModel
+        resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+        if resp.Diagnostics.HasError() { return }
+
+        ctx, cancel := crud.HandleTimeout(ctx, data.Timeouts.Delete, DeleteTimeout*time.Second, &resp.Diagnostics)
+        if cancel == nil { return }
+        defer cancel()
+
+        err := r.client.
+            DeviceManagement().
+            ResourceTemplates().
+            ByResourceTemplateId(data.ID.ValueString()).
+            Delete(ctx, nil)
+        if err != nil {
+            errors.HandleKiotaGraphError(ctx, err, resp, constants.TfOperationDelete, r.WritePermissions)
+            return
+        }
+
+        resp.State.RemoveResource(ctx)
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  **Do not build API request bodies directly in CRUD functions.** Delegate request construction to separate functions (e.g., `constructResource`). CRUD functions should focus on API calls and overall logic flow.
+</Note>
+
+### 4. Map Remote State to Terraform State
+
+Implement a function to map the API response to the Terraform state model:
+
+```go
+func mapRemoteStateToTerraform(ctx context.Context, data *ResourceTemplateResourceModel, remoteResource graphmodels.ResourceTemplateable) {
+    if remoteResource == nil {
+        tflog.Debug(ctx, "Remote resource is nil")
+        return
+    }
+    
+    data.ID = types.StringValue(convert.GraphToFrameworkString(remoteResource.GetId()))
+    data.Name = types.StringValue(convert.GraphToFrameworkString(remoteResource.GetName()))
+    data.Enabled = types.BoolValue(convert.GraphToFrameworkBool(remoteResource.GetEnabled()))
+    // Map other fields as needed
+}
+```
+
+<Tip>
+  - Use the `tflog` package for debug and trace logging
+  - Use `types.StringValue`, `types.BoolValue`, etc. to set Terraform state values
+  - Use `convert.GraphToFrameworkString` and similar helpers to convert SDK types
+</Tip>
+
+### 5. Write Constructors and Register the Resource
+
+Implement the resource constructor:
+
+```go
+func NewResourceTemplateResource() resource.Resource {
+    return &ResourceTemplateResource{}
+}
+```
+
+Register the resource in `internal/provider/resources.go`:
+
+```go
+import graphBetaResourceTemplate "github.com/deploymenttheory/terraform-provider-microsoft365/internal/services/resources/resource_template"
+
+func (p *Microsoft365Provider) Resources(ctx context.Context) []func() resource.Resource {
+    return []func() resource.Resource{
+        // ... other resources
+        graphBetaResourceTemplate.NewResourceTemplateResource,
+    }
+}
+```
+
+### 6. Testing
+
+Write acceptance and unit tests for your resource. Use the test helpers and patterns found in the provider's test files.
+
+<Warning>
+  All new resources must include comprehensive unit and acceptance tests.
+</Warning>
+
+## Typical Package Structure
+
+A typical resource package is organized as follows:
+
+```
+resource_template/
+├── resource.go           # Resource registration, schema definition
+├── model.go              # Data model definitions
+├── crud.go               # Create, Read, Update, Delete operations
+├── construct_*.go        # Functions for building API request bodies
+├── state_*.go            # Functions for mapping API responses to state
+├── modify_plan.go        # (Optional) Plan modification logic
+├── *_assignment.go       # (Optional) Assignment-specific logic
+├── model_*.go            # (Optional) Additional model definitions
+└── resource_docs/        # (Optional) Resource-specific documentation
+```
+
+### Best Practices
+
+<CardGroup cols={2}>
+  <Card title="File Organization" icon="folder">
+    Keep each file focused on a single responsibility (CRUD, model, construction, state mapping, schema)
+  </Card>
+  <Card title="Comments" icon="comment">
+    Use comments only for describing unclear code or API insights. The code should be self-explanatory
+  </Card>
+  <Card title="Docstrings" icon="book">
+    Use docstrings to explain the purpose of each function
+  </Card>
+  <Card title="Modularity" icon="puzzle-piece">
+    For complex resources, break out logic into multiple files for readability
+  </Card>
+</CardGroup>
+
+## Reference: Resource Template
+
+Use these template files as a starting point for new resources:
+
+- **CRUD**: `internal/resources/_resource_template/crud.go`
+- **Model**: `internal/resources/_resource_template/model.go`
+- **State**: `internal/resources/_resource_template/state.go`
+
+Follow the patterns and structure to ensure consistency across the provider.
+
+## Additional Tips
+
+<Accordion title="API Implementation Guidelines">
+  - Always include a link to the relevant Microsoft Graph API documentation in your resource files
+  - Align your Graph API implementation with the behavior of the GUI for that resource
+  - You will often find resources only exist in the beta API with no v1.0 equivalent
+  - Prefer v1.0 endpoints for stable features; use beta only when necessary
+</Accordion>
+
+<Accordion title="Logging and Error Handling">
+  - Use the `tflog` package for debug and trace logging
+  - Handle errors and diagnostics carefully to provide clear feedback to users
+  - Use the shared error handling helpers for consistent error messages
+</Accordion>
+
+<Accordion title="Code Quality">
+  - Keep resource logic minimal and focused
+  - Avoid unnecessary abstraction until needed
+  - Follow Go best practices and naming conventions
+  - Run linters and tests before submitting PRs
+</Accordion>
+
+## Terraform Registry Documentation
+
+A template for the Terraform Registry documentation is required for each resource:
+
+1. Add the template to `templates/resources/` directory
+2. Use the naming pattern:
+   - `graph_beta_<resource_name>.md.tmpl` for beta resources
+   - `graph_<resource_name>.md.tmpl` for v1.0 resources
+
+3. Include in the template:
+   - Title, subcategory, and description
+   - Microsoft documentation links
+   - Required API permissions
+   - Version history
+   - Example usage (referencing an example `.tf` file)
+   - Import instructions
+
+See `templates/resources/graph_beta_device_management_settings_catalog.md.tmpl` for an example.
+
+## Example Usage and Import
+
+### Example Resource Usage
+
+```hcl
+resource "microsoft365_graph_beta_device_management_settings_catalog" "example" {
+  name        = "Example Catalog Policy"
+  description = "Example policy for demonstration purposes"
+  platforms   = "windows10"
+  
+  configuration_policy {
+    settings {
+      id = "example-setting-id"
+      setting_instance {
+        odata_type = "#microsoft.graph.deviceManagementConfigurationStringSettingInstance"
+        setting_definition_id = "example-definition-id"
+        simple_setting_value {
+          odata_type = "#microsoft.graph.deviceManagementConfigurationStringSettingValue"
+          value      = "example-value"
+        }
+      }
+    }
+  }
+}
+```
+
+### Import Example
+
+```bash
+terraform import microsoft365_graph_beta_your_resource.example <resource_id>
+```
+
+## Getting Help
+
+For questions or to discuss development:
+
+- Join the [community Discord](https://discord.gg/Uq8zG6g7WE)
+- Review the [Development Guide](https://github.com/deploymenttheory/terraform-provider-microsoft365/blob/main/docs/development/guide.md) in the repository
+- Check existing resources for implementation examples
+
+## Related Resources
+
+- [Provider Roadmap](/reference/provider-roadmap) - Planned features
+- [Known Issues](/reference/known-issues) - Current bugs and limitations
+- [Contributing Guide](/reference/contributing) - Contribution guidelines
+- [Provider Comparison](/reference/provider-comparison) - Comparison with other providers

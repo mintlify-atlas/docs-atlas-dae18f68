@@ -1,0 +1,164 @@
+---
+title: Device Code Authentication
+description: Authenticate using device code flow for environments without a browser
+---
+
+The Microsoft 365 provider can use device code authentication when interactive login isn't possible directly within the application. This is useful for environments without a web browser or where the user cannot directly interact with a login prompt.
+
+## How Device Code Authentication Works
+
+<Steps>
+  <Step title="Request Device Code">
+    The provider requests a device code from Microsoft Entra ID
+  </Step>
+  
+  <Step title="Display Code">
+    The provider displays a message with:
+    - A unique code
+    - A URL where the code should be entered
+  </Step>
+  
+  <Step title="User Authentication">
+    The user visits the URL on any device with a browser and enters the code
+  </Step>
+  
+  <Step title="Complete Authentication">
+    The user authenticates in the browser
+  </Step>
+  
+  <Step title="Receive Token">
+    The provider receives an access token once authentication is complete
+  </Step>
+</Steps>
+
+## Prerequisites
+
+- A Microsoft Entra ID tenant
+- Permissions to create an app registration in your tenant
+
+## Setup
+
+<Steps>
+  <Step title="Create App Registration">
+    [Create an app registration in Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
+  </Step>
+  
+  <Step title="Configure Platform">
+    - Set "Mobile and desktop applications" as platform type
+    - Add `https://login.microsoftonline.com/common/oauth2/nativeclient` as a redirect URI
+  </Step>
+  
+  <Step title="Add API Permissions">
+    - Navigate to "API permissions"
+    - Click "Add a permission" and select "Microsoft Graph"
+    - Choose "Delegated permissions" (device code flow requires delegated permissions)
+    - Add the necessary permissions
+    - Click "Grant admin consent"
+  </Step>
+</Steps>
+
+## Provider Configuration
+
+<Tabs>
+  <Tab title="Environment Variables (Recommended)">
+    ```bash
+    export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_AUTH_METHOD="device_code"
+    export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+    ```
+    
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "device_code"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Terraform Configuration">
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "device_code"
+      tenant_id   = "00000000-0000-0000-0000-000000000000"
+      entra_id_options = {
+        client_id = "00000000-0000-0000-0000-000000000000"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Usage Workflow
+
+When you run Terraform with device code authentication, you'll see a message similar to:
+
+```
+To sign in, use a web browser to open the page https://microsoft.com/devicelogin 
+and enter the code ABC123XYZ to authenticate.
+```
+
+<Steps>
+  <Step title="Open Browser">
+    Open the URL in any web browser
+  </Step>
+  
+  <Step title="Enter Code">
+    Enter the code displayed in your terminal
+  </Step>
+  
+  <Step title="Sign In">
+    Sign in with your Microsoft credentials
+  </Step>
+  
+  <Step title="Continue">
+    Terraform will continue once authentication is complete
+  </Step>
+</Steps>
+
+## Use Cases
+
+Device code authentication is ideal for:
+
+<CardGroup cols={2}>
+  <Card title="CI/CD Pipelines" icon="code-branch">
+    CI/CD pipelines with manual intervention
+  </Card>
+  
+  <Card title="No Browser Environments" icon="terminal">
+    Environments without a web browser
+  </Card>
+  
+  <Card title="Remote Terminals" icon="server">
+    Remote terminals or SSH sessions
+  </Card>
+  
+  <Card title="Limited Redirection" icon="network-wired">
+    Scenarios where redirection to a local web server isn't possible
+  </Card>
+</CardGroup>
+
+## Security Considerations
+
+<Info>
+**Important Security Notes**
+
+- Device code authentication requires user interaction for each token acquisition
+- The default token lifetime is one hour
+- For automated processes, consider using client secret, certificate, or OIDC authentication instead
+- This authentication method grants permissions based on the authenticated user's privileges
+</Info>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Code expired">
+    If you don't authenticate within the time limit (typically 15 minutes), you'll need to restart the process.
+  </Accordion>
+  
+  <Accordion title="Permission denied">
+    Ensure you've granted admin consent for the required permissions in your app registration.
+  </Accordion>
+  
+  <Accordion title="No code displayed">
+    Verify your terminal can display output from the provider. Check that stdout is not being redirected.
+  </Accordion>
+</AccordionGroup>

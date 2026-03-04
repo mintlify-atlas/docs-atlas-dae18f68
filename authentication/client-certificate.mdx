@@ -1,0 +1,322 @@
+---
+title: Client Certificate Authentication
+description: Authenticate using a Service Principal with client certificate
+---
+
+The Microsoft 365 provider can use a Service Principal with a Client Certificate to authenticate to Microsoft 365 services. This is a more secure authentication method compared to client secrets, as certificates are less susceptible to certain types of attacks and can be managed with stronger security controls.
+
+## Prerequisites
+
+- A Microsoft Entra ID tenant
+- Permissions to create an app registration in your tenant
+- Tools for generating certificates (OpenSSL, PowerShell, or other certificate management tools)
+
+## Generate a Certificate
+
+<Tabs>
+  <Tab title="Using OpenSSL">
+    ```bash
+    # Generate a private key
+    openssl genrsa -out key.pem 4096
+    
+    # Generate a certificate signing request (CSR)
+    openssl req -new -key key.pem -out cert.csr
+    
+    # Generate a self-signed certificate (valid for 365 days)
+    openssl x509 -req -days 365 -in cert.csr -signkey key.pem -out cert.pem
+    
+    # Create a PKCS#12 file that contains both certificate and private key
+    openssl pkcs12 -export -out cert.pfx -inkey key.pem -in cert.pem -password pass:YourSecurePassword
+    ```
+  </Tab>
+  
+  <Tab title="Using PowerShell">
+    ```powershell
+    # Create a self-signed certificate
+    $cert = New-SelfSignedCertificate -Subject "CN=Microsoft365TerraformAuth" `
+      -CertStoreLocation "Cert:\CurrentUser\My" `
+      -KeyExportPolicy Exportable `
+      -KeySpec Signature `
+      -KeyLength 2048 `
+      -KeyAlgorithm RSA `
+      -HashAlgorithm SHA256 `
+      -NotAfter (Get-Date).AddYears(1)
+    
+    # Export the public certificate (for uploading to Azure)
+    Export-Certificate -Cert $cert -FilePath "cert.cer" -Type CERT
+    
+    # Export the certificate with private key (for Terraform)
+    $pwd = ConvertTo-SecureString -String "YourSecurePassword" -Force -AsPlainText
+    Export-PfxCertificate -Cert $cert -FilePath "cert.pfx" -Password $pwd
+    ```
+  </Tab>
+</Tabs>
+
+## Setup App Registration
+
+<Tabs>
+  <Tab title="Manual Setup">
+    <Steps>
+      <Step title="Create App Registration">
+        [Create an app registration in Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
+      </Step>
+      
+      <Step title="Add API Permissions">
+        - Navigate to "API permissions"
+        - Click "Add a permission" and select "Microsoft Graph"
+        - Choose "Application permissions" for automation scenarios
+        - **Apply least privilege principles**
+        - Click "Grant admin consent"
+      </Step>
+      
+      <Step title="Upload Certificate">
+        - Navigate to "Certificates & secrets" in your app registration
+        - In the "Certificates" section, click "Upload certificate"
+        - Upload your public certificate (.cer or .pem) file
+        - Add a description and expiration date
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Using Terraform">
+    ```terraform
+    # Generate a private key
+    resource "tls_private_key" "cert_key" {
+      algorithm = "RSA"
+      rsa_bits  = 4096
+    }
+    
+    # Generate a self-signed certificate
+    resource "tls_self_signed_cert" "cert" {
+      private_key_pem = tls_private_key.cert_key.private_key_pem
+      
+      subject {
+        common_name = "Microsoft365TerraformAuth"
+      }
+      
+      validity_period_hours = 8760 # 1 year
+      
+      allowed_uses = [
+        "key_encipherment",
+        "digital_signature",
+        "client_auth",
+      ]
+    }
+    
+    # Create application
+    resource "azuread_application" "microsoft365_app" {
+      display_name = "Microsoft365 Terraform Provider"
+    }
+    
+    # Add the certificate to the application
+    resource "azuread_application_certificate" "microsoft365_cert" {
+      application_id = azuread_application.microsoft365_app.id
+      type           = "AsymmetricX509Cert"
+      value          = tls_self_signed_cert.cert.cert_pem
+      end_date       = timeadd(timestamp(), "8760h")
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Provider Configuration
+
+<Tabs>
+  <Tab title="Environment Variables (Recommended)">
+    ```bash
+    export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_AUTH_METHOD="client_certificate"
+    export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_CLIENT_CERTIFICATE_FILE_PATH="/path/to/certificate.pfx"
+    export M365_CLIENT_CERTIFICATE_PASSWORD="YourSecurePassword"
+    export M365_SEND_CERTIFICATE_CHAIN="true" # Optional
+    ```
+    
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "client_certificate"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Terraform Configuration">
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "client_certificate"
+      tenant_id   = "00000000-0000-0000-0000-000000000000"
+      entra_id_options = {
+        client_id                   = "00000000-0000-0000-0000-000000000000"
+        client_certificate          = "/path/to/certificate.pfx"
+        client_certificate_password = "YourSecurePassword"
+        send_certificate_chain      = true # Optional
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Certificate Management
+
+### Certificate Rotation
+
+<Steps>
+  <Step title="Generate New Certificate">
+    Create a new certificate following the generation methods above
+  </Step>
+  
+  <Step title="Upload to App Registration">
+    Upload the new certificate to your Entra ID app registration. Both old and new certificates can be active simultaneously.
+  </Step>
+  
+  <Step title="Update Configuration">
+    Update your Terraform configuration or environment variables to use the new certificate
+  </Step>
+  
+  <Step title="Remove Old Certificate">
+    After confirming the new certificate works, optionally remove the old certificate from the app registration
+  </Step>
+</Steps>
+
+<Tip>
+Set up a pipeline job to regularly scan for certificate expiration to ensure you have sufficient time to perform rotation.
+</Tip>
+
+### Certificate Storage Options
+
+<CardGroup cols={2}>
+  <Card title="Azure Key Vault" icon="vault">
+    Store certificates in Azure Key Vault and retrieve during Terraform execution
+  </Card>
+  
+  <Card title="HashiCorp Vault" icon="lock">
+    Use Vault's PKI engine for certificate management and rotation
+  </Card>
+  
+  <Card title="Secure File Storage" icon="folder">
+    Ensure certificate files have restrictive permissions (chmod 600)
+  </Card>
+  
+  <Card title="CI/CD Secrets" icon="shield">
+    Store certificates in your CI/CD pipeline's secure secret storage
+  </Card>
+</CardGroup>
+
+### Using Azure Key Vault
+
+```terraform
+# Retrieve certificate from Azure Key Vault
+data "azurerm_key_vault" "example" {
+  name                = "my-keyvault"
+  resource_group_name = "my-resource-group"
+}
+
+data "azurerm_key_vault_certificate" "example" {
+  name         = "my-certificate"
+  key_vault_id = data.azurerm_key_vault.example.id
+}
+
+provider "microsoft365" {
+  auth_method = "client_certificate"
+  tenant_id   = var.tenant_id
+  entra_id_options = {
+    client_id                   = var.client_id
+    client_certificate          = data.azurerm_key_vault_certificate.example.certificate_data_base64
+    client_certificate_password = ""
+  }
+}
+```
+
+## HashiCorp Vault Integration
+
+### Store Certificates in Vault
+
+```bash
+# Store tenant_id and client_id
+vault kv put secret/microsoft365/credentials \
+  tenant_id="00000000-0000-0000-0000-000000000000" \
+  client_id="00000000-0000-0000-0000-000000000000"
+
+# Store certificate (base64 encoded)
+vault kv put secret/microsoft365/certificate \
+  certificate="$(base64 -i /path/to/certificate.pfx)" \
+  password="YourSecurePassword"
+```
+
+### Retrieve with Vault Provider
+
+```terraform
+data "vault_kv_secret_v2" "microsoft365_creds" {
+  mount = "secret"
+  name  = "microsoft365/credentials"
+}
+
+data "vault_kv_secret_v2" "microsoft365_cert" {
+  mount = "secret"
+  name  = "microsoft365/certificate"
+}
+
+resource "local_file" "certificate" {
+  content_base64  = data.vault_kv_secret_v2.microsoft365_cert.data["certificate"]
+  filename        = "${path.module}/temp_certificate.pfx"
+  file_permission = "0600"
+}
+
+provider "microsoft365" {
+  auth_method = "client_certificate"
+  tenant_id   = data.vault_kv_secret_v2.microsoft365_creds.data["tenant_id"]
+  entra_id_options = {
+    client_id                   = data.vault_kv_secret_v2.microsoft365_creds.data["client_id"]
+    client_certificate          = local_file.certificate.filename
+    client_certificate_password = data.vault_kv_secret_v2.microsoft365_cert.data["password"]
+  }
+}
+```
+
+## Security Considerations
+
+<Warning>
+**Certificate Security Best Practices**
+
+- Use strong passwords for PKCS#12 (.pfx) files
+- Protect private keys and certificates with proper file permissions
+- Never commit certificates or private keys to version control
+- Use certificates with reasonable expiration periods (typically 1-2 years)
+- Consider using HSMs for storing certificate private keys in high-security environments
+- For maximum security, use certificates from a trusted Certificate Authority rather than self-signed
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Authentication failed">
+    Verify the tenant ID, client ID, and certificate details are correct. Ensure the certificate hasn't expired.
+  </Accordion>
+  
+  <Accordion title="Certificate not recognized">
+    Ensure the certificate is properly formatted and uploaded to the app registration. The public key must be uploaded to Entra ID.
+  </Accordion>
+  
+  <Accordion title="Certificate format issues">
+    Ensure your certificate is in PKCS#12 format (.pfx or .p12). Convert if necessary using OpenSSL.
+  </Accordion>
+  
+  <Accordion title="SendCertificateChain issues">
+    If you're having authentication problems, try setting `send_certificate_chain` to `true`.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+Enable debug mode for detailed logging:
+
+```bash
+export M365_DEBUG_MODE="true"
+```
+
+Or in Terraform:
+
+```terraform
+provider "microsoft365" {
+  debug_mode = true
+}
+```
+</Tip>

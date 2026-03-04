@@ -1,0 +1,404 @@
+---
+title: Provider Comparison
+description: Comparison between the Community Microsoft 365 Terraform Provider and the Microsoft terraform-provider-msgraph
+---
+
+In July 2025, Microsoft released the [terraform-provider-msgraph](https://github.com/hashicorp/terraform-provider-msgraph) partner provider. This document compares the two providers to help you choose the right one for your use case.
+
+## Scope and Coverage
+
+### Community Microsoft 365 Provider (This Provider)
+
+This project aims to cover all aspects of Microsoft 365 workloads including:
+
+<CardGroup cols={2}>
+  <Card title="Microsoft Graph API" icon="diagram-project">
+    Full coverage of Microsoft Graph resources for device management, identity, and more
+  </Card>
+  <Card title="Microsoft Teams" icon="users">
+    Teams configuration and management via teams.microsoft.com
+  </Card>
+  <Card title="Exchange Online" icon="envelope">
+    Exchange configuration via exchange.microsoft.com
+  </Card>
+  <Card title="SharePoint Online" icon="sharepoint">
+    SharePoint management via sharepointonline.com
+  </Card>
+  <Card title="Microsoft Defender" icon="shield">
+    Security configuration via security.microsoft.com
+  </Card>
+  <Card title="Utility Resources" icon="tools">
+    Helper data sources for metadata and lifecycle management
+  </Card>
+</CardGroup>
+
+**Out of Scope:**
+- Entra ID resources (managed by the azureAD provider)
+- Secondary service operations (e.g., Defender for Endpoint security when Intune handles it)
+
+### Microsoft terraform-provider-msgraph
+
+The official Microsoft provider focuses exclusively on:
+- Microsoft Graph API resources
+- Generic resource types that map to HTTP operations
+- Thin wrapper around the Graph API
+
+<Note>
+  The Community Microsoft 365 Provider has broader scope, covering multiple Microsoft 365 services beyond just Microsoft Graph.
+</Note>
+
+## Fundamental Design Philosophy
+
+The key difference between these providers lies in their approach to API interactions and the level of abstraction provided.
+
+### Understanding Microsoft Graph API Complexity
+
+Before comparing providers, it's important to understand the inherent complexity both must handle:
+
+**API Characteristics:**
+- **Multi-step Operations**: Many business operations require multiple sequential API calls
+- **Eventual Consistency**: Writes may not be immediately visible in reads
+- **Complex Request Bodies**: Nested JSON structures with specific OData type annotations
+- **State Dependencies**: Resource creation often requires reading state from multiple related endpoints
+- **Error Handling Complexity**: Different endpoints have different retry requirements
+- **Assignment Management**: Device management resources require separate assignment API calls
+
+**Real-world Example - Windows Update Ring:**
+
+Creating a functional Windows Update Ring involves:
+1. POST to `/deviceManagement/deviceConfigurations` (create policy)
+2. POST to `/deviceManagement/deviceConfigurations/{id}/assign` (assign to groups)
+3. GET with `$expand=assignments` (verify complete state)
+4. Handle eventual consistency between configuration and assignment APIs
+5. Manage complex assignment target structures with filter relationships
+
+This complexity exists regardless of provider - the question is **how each provider handles it**.
+
+## Approach Comparison
+
+### terraform-provider-msgraph: Direct API Exposure
+
+The Microsoft provider is a **thin wrapper** that directly exposes the API's complexity to users.
+
+#### Resource Architecture
+
+Four generic resource types that map to HTTP operations:
+
+- `msgraph_resource` - Generic resource for any Graph API endpoint (POST/GET/PATCH/DELETE)
+- `msgraph_resource_action` - For performing actions (POST actions like assign, send)
+- `msgraph_resource_collection` - For managing reference collections ($ref endpoints)
+- `msgraph_update_resource` - For updating subset of properties (PATCH operations)
+
+#### Developer Requirements
+
+**Graph API Expertise Required:**
+- Deep understanding of Graph API URL structures
+- OData query parameter mastery (`$expand`, `$select`, `$filter`, `$top`)
+- Knowledge of complex JSON schema including OData type annotations
+- HTTP method mapping (POST vs PATCH vs GET)
+- JMESPath queries for extracting data from responses
+
+**Manual Orchestration Burden:**
+- Coordinating multiple Terraform resources for complex operations
+- Manual `depends_on` declarations for operation sequencing
+- Separate data sources needed to read complete resource state
+- No built-in retry logic for Graph API-specific issues
+- Manual handling of create/update/delete operation differences
+
+<Warning>
+  Complex operations may require 3-5 separate Terraform resources and deep Graph API knowledge.
+</Warning>
+
+### Community Microsoft 365 Provider: Business-Focused Abstraction
+
+This provider provides **significant abstraction** that shields users from API complexity.
+
+#### Resource Architecture
+
+Purpose-built resources that represent complete business operations:
+
+- **Domain-Specific Resources**: Each resource type represents a complete business workflow
+- **Strongly-Typed Schemas**: Intuitive field names and validation rather than raw JSON
+- **Embedded Relationships**: Related operations managed within single resources
+- **Business Logic Integration**: Resources understand context and handle complex workflows automatically
+
+#### Developer Experience Benefits
+
+**Business Domain Focus:**
+- Declarative configuration describing desired end-state
+- Intuitive field names (`allow_windows11_upgrade` vs API's `allowWindows11Upgrade`)
+- Built-in validation catches configuration errors before API calls
+- Contextual documentation for each field
+- IDE support with autocomplete and validation
+
+**Automatic Complexity Management:**
+- Single resource operations automatically trigger multiple coordinated API calls
+- Built-in retry logic handles eventual consistency across all related endpoints
+- Raw Graph API errors translated into actionable business context
+- Lifecycle optimization uses the most efficient API patterns automatically
+- Dependency resolution handles prerequisite operations and timing
+
+<Tip>
+  Business requirements map directly to single resource declarations, not multi-step API workflows.
+</Tip>
+
+## Detailed Comparison Examples
+
+### Example 1: Group License Assignment
+
+<CodeGroup>
+
+```hcl Community Microsoft 365 Provider
+resource "microsoft365_graph_beta_group_license_assignment" "sales_team" {
+  group_id = "2243c326-937g-53f0-c9df-2e68f106b901"
+
+  add_licenses = [
+    {
+      sku_id = "6fd2c87f-b296-42f0-b197-1e91e994b900" # Office 365 E3
+      disabled_plans = ["efb87545-963c-4e0d-99df-69c6916d9eb0"]
+    }
+  ]
+
+  remove_licenses = ["f30db892-07e9-47e9-9163-06ecf6a79d2c"]
+}
+```
+
+```hcl MSGraph Provider
+resource "msgraph_resource" "group_license_assignment" {
+  url = "groups/2243c326-937g-53f0-c9df-2e68f106b901/assignLicense"
+  
+  body = {
+    addLicenses = [
+      {
+        skuId = "6fd2c87f-b296-42f0-b197-1e91e994b900"
+        disabledPlans = ["efb87545-963c-4e0d-99df-69c6916d9eb0"]
+      }
+    ]
+    removeLicenses = ["f30db892-07e9-47e9-9163-06ecf6a79d2c"]
+  }
+}
+
+# Additional resources needed for proper state management
+data "msgraph_resource" "group_licenses" {
+  url = "groups/2243c326-937g-53f0-c9df-2e68f106b901"
+  query_parameters = { "$select" = ["assignedLicenses"] }
+}
+```
+
+</CodeGroup>
+
+**Community Provider Automatically Handles:**
+- POST /groups/{id}/assignLicense with complex request body construction
+- GET /groups/{id}?$select=assignedLicenses for state management
+- Differential license assignment logic for updates
+- Proper cleanup of managed licenses on deletion
+- Built-in retry for throttling and consistency issues
+
+**MSGraph Provider Requires:**
+- Knowledge of exact Graph API endpoint structure
+- Understanding of assignLicense API's request body format
+- Manual state reading with separate data sources
+- Implementation of differential update logic
+- Manual cleanup logic
+
+### Example 2: Windows Update Ring with Assignments
+
+<CodeGroup>
+
+```hcl Community Microsoft 365 Provider
+resource "microsoft365_graph_beta_device_management_windows_update_ring" "corporate_updates" {
+  display_name                                 = "Corporate Windows Update Ring"
+  description                                  = "Managed updates for corporate devices"
+  microsoft_update_service_allowed             = true
+  drivers_excluded                             = false
+  quality_updates_deferral_period_in_days      = 7
+  feature_updates_deferral_period_in_days      = 14
+  allow_windows11_upgrade                      = false
+  skip_checks_before_restart                   = true
+  automatic_update_mode                        = "autoInstallAndRebootAtScheduledTime"
+  business_ready_updates_only                  = "businessReadyOnly"
+  delivery_optimization_mode                   = "httpWithPeeringNat"
+  prerelease_features                          = "settingsOnly"
+  update_weeks                                 = "firstWeek"
+  active_hours_start                           = "09:00:00"
+  active_hours_end                             = "17:00:00"
+  user_pause_access                            = "disabled"
+  user_windows_update_scan_access              = "disabled"
+  update_notification_level                    = "defaultNotifications"
+  feature_updates_rollback_window_in_days      = 10
+  role_scope_tag_ids                           = ["0", "1"]
+
+  deadline_settings = {
+    deadline_for_feature_updates_in_days = 7
+    deadline_for_quality_updates_in_days = 2
+    deadline_grace_period_in_days        = 1
+    postpone_reboot_until_after_deadline = true
+  }
+
+  assignments = [
+    {
+      type     = "groupAssignmentTarget"
+      group_id = "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      type        = "groupAssignmentTarget"
+      group_id    = "55555555-5555-5555-5555-555555555555"
+      filter_id   = "66666666-6666-6666-6666-666666666666"
+      filter_type = "include"
+    }
+  ]
+}
+```
+
+```hcl MSGraph Provider
+# Step 1: Create the Windows Update Ring policy
+resource "msgraph_resource" "windows_update_ring" {
+  url = "deviceManagement/deviceConfigurations"
+  
+  body = {
+    "@odata.type" = "microsoft.graph.windowsUpdateForBusinessConfiguration"
+    displayName = "Corporate Windows Update Ring"
+    description = "Managed updates for corporate devices"
+    microsoftUpdateServiceAllowed = true
+    driversExcluded = false
+    qualityUpdatesDeferralPeriodInDays = 7
+    featureUpdatesDeferralPeriodInDays = 14
+    allowWindows11Upgrade = false
+    skipChecksBeforeRestart = true
+    automaticUpdateMode = "autoInstallAndRebootAtScheduledTime"
+    businessReadyUpdatesOnly = "businessReadyOnly"
+    deliveryOptimizationMode = "httpWithPeeringNat"
+    prereleaseFeatures = "settingsOnly"
+    updateWeeks = "firstWeek"
+    activeHoursStart = "09:00:00"
+    activeHoursEnd = "17:00:00"
+    userPauseAccess = "disabled"
+    userWindowsUpdateScanAccess = "disabled"
+    updateNotificationLevel = "defaultNotifications"
+    featureUpdatesRollbackWindowInDays = 10
+    roleScopeTagIds = ["0", "1"]
+    deadlineForFeatureUpdatesInDays = 7
+    deadlineForQualityUpdatesInDays = 2
+    deadlineGracePeriodInDays = 1
+    postponeRebootUntilAfterDeadline = true
+  }
+  
+  response_export_values = {
+    id = "id"
+    all = "@"
+  }
+}
+
+# Step 2: Manually create assignments (separate API call)
+resource "msgraph_resource_action" "assign_update_ring" {
+  resource_url = "deviceManagement/deviceConfigurations/${msgraph_resource.windows_update_ring.id}"
+  action       = "assign"
+  method       = "POST"
+  
+  body = {
+    assignments = [
+      {
+        "@odata.type" = "microsoft.graph.deviceConfigurationAssignment"
+        target = {
+          "@odata.type" = "microsoft.graph.groupAssignmentTarget"
+          groupId = "44444444-4444-4444-4444-444444444444"
+        }
+      },
+      {
+        "@odata.type" = "microsoft.graph.deviceConfigurationAssignment"
+        target = {
+          "@odata.type" = "microsoft.graph.groupAssignmentTarget"
+          groupId = "55555555-5555-5555-5555-555555555555"
+          deviceAndAppManagementAssignmentFilterId = "66666666-6666-6666-6666-666666666666"
+          deviceAndAppManagementAssignmentFilterType = "include"
+        }
+      }
+    ]
+  }
+  
+  depends_on = [msgraph_resource.windows_update_ring]
+}
+
+# Step 3: Separate read for complete state (policy + assignments)
+data "msgraph_resource" "update_ring_with_assignments" {
+  url = "deviceManagement/deviceConfigurations/${msgraph_resource.windows_update_ring.id}"
+  query_parameters = {
+    "$expand" = ["assignments"]
+  }
+  
+  depends_on = [msgraph_resource_action.assign_update_ring]
+}
+```
+
+</CodeGroup>
+
+**Community Provider Automatically Handles:**
+- POST `/deviceManagement/deviceConfigurations` (create policy)
+- POST `/deviceManagement/deviceConfigurations/{id}/assign` (assign to groups)
+- GET with `$expand=assignments` (read complete state)
+- Built-in retry logic for eventual consistency
+- Differential assignment management
+- Proper cleanup on deletion
+
+**MSGraph Provider Requires:**
+- Understanding of complex OData types
+- Knowledge of exact API schema including nested structures
+- Manual orchestration across 2-3 different resources
+- Assignment construction with proper target types
+- Understanding dependency chain between policy and assignment
+- Error handling and retry logic across multiple resources
+- Separate data sources to read complete state
+- Manual lifecycle management for updates
+
+## Key Differentiators
+
+| Aspect | Community Provider | MSGraph Provider |
+|--------|-------------------|------------------|
+| **Abstraction Level** | High-level business operations | Low-level Graph API wrapper |
+| **API Knowledge Required** | Minimal - focused on business intent | Extensive - must understand Graph API |
+| **Configuration Complexity** | Simple, declarative | Complex, API-centric |
+| **Multi-API Operations** | Automatic chaining | Manual orchestration |
+| **State Management** | Built-in with retries | Manual implementation |
+| **Error Handling** | Comprehensive, contextual | Basic Graph API errors |
+| **Resource Lifecycle** | Complete CRUD automation | Manual CRUD construction |
+| **Type Safety** | Strongly typed schemas | Dynamic JSON bodies |
+| **Learning Curve** | Terraform + business domain | Terraform + Graph API + OData |
+
+## When to Choose Which
+
+### Choose Community Microsoft 365 Provider When:
+
+<Check>
+- You want Infrastructure-as-Code for M365 without deep Graph API knowledge
+- You need complex multi-step operations handled automatically
+- You prioritize developer productivity and declarative configuration
+- You want built-in best practices for error handling and retries
+- Your team focuses on business outcomes, not API intricacies
+- You need coverage beyond Microsoft Graph (Teams, Exchange, SharePoint)
+</Check>
+
+### Choose Microsoft terraform-provider-msgraph When:
+
+<Check>
+- You need Microsoft's official support
+- You already have strong familiarity with Graph API
+- You need maximum flexibility to construct custom API calls
+- You prefer thin abstractions over opinionated frameworks
+- You're building simple, single-API-call resources
+</Check>
+
+## Support Considerations
+
+<Info>
+  The **terraform-provider-msgraph** is officially supported by Microsoft.
+  
+  The **Community Microsoft 365 Provider** is community-supported and not officially supported by Microsoft.
+</Info>
+
+Depending on your use case and support requirements, this may be a consideration. However, there's nothing preventing a Terraform configuration from using both providers together.
+
+## Related Resources
+
+- [Development Guide](/reference/development-guide) - How to build resources
+- [Provider Schema](/reference/provider-schema) - Configuration options
+- [Examples](/reference/examples) - Example configurations

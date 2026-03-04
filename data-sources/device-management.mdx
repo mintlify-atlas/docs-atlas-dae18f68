@@ -1,0 +1,500 @@
+---
+title: Device Management Data Sources
+description: Query devices, policies, scripts, updates, and device management configurations
+icon: laptop
+---
+
+# Device Management Data Sources
+
+Device management data sources allow you to query and reference devices, compliance policies, configuration profiles, scripts, updates, and other Intune/device management resources.
+
+## Available Data Sources
+
+### Devices
+
+#### microsoft365_graph_beta_device_management_managed_device
+
+Query managed devices enrolled in Intune.
+
+**Query Methods:**
+- `all` - Retrieve all managed devices
+- `id` - Query by device ID
+- `device_name` - Filter by device name (partial match)
+- `serial_number` - Filter by serial number (partial match)
+- `user_id` - Filter by user principal name (partial match)
+- `odata` - Advanced OData queries
+
+**Example:**
+
+```hcl
+# Get all Windows devices
+data "microsoft365_graph_beta_device_management_managed_device" "windows" {
+  filter_type  = "odata"
+  odata_filter = "operatingSystem eq 'Windows'"
+}
+
+# Get specific device by ID
+data "microsoft365_graph_beta_device_management_managed_device" "specific" {
+  filter_type  = "id"
+  filter_value = "12345678-1234-1234-1234-123456789012"
+}
+
+# Get compliant devices only
+data "microsoft365_graph_beta_device_management_managed_device" "compliant" {
+  filter_type  = "odata"
+  odata_filter = "complianceState eq 'compliant'"
+  odata_orderby = "lastSyncDateTime desc"
+}
+```
+
+**Key Attributes:**
+- `id` - Device ID
+- `device_name` - Device name
+- `operating_system` - OS type (Windows, iOS, Android, macOS)
+- `os_version` - Operating system version
+- `compliance_state` - Compliance status (compliant, noncompliant, unknown)
+- `managed_device_owner_type` - Device ownership (company, personal)
+- `enrollment_type` - How device was enrolled
+- `user_principal_name` - User email address
+- `serial_number` - Device serial number
+- `last_sync_date_time` - Last check-in time
+- `enrolled_date_time` - Enrollment date
+
+### Device Categories
+
+#### microsoft365_graph_beta_device_management_device_category
+
+Query device category definitions.
+
+```hcl
+data "microsoft365_graph_beta_device_management_device_category" "all" {
+  filter_type = "all"
+}
+
+data "microsoft365_graph_beta_device_management_device_category" "laptops" {
+  filter_type  = "display_name"
+  filter_value = "Laptops"
+}
+```
+
+**Attributes:**
+- `id` - Category ID
+- `display_name` - Category name
+- `description` - Category description
+
+### Assignment Filters
+
+#### microsoft365_graph_beta_device_management_assignment_filter
+
+Query assignment filters for targeting policies.
+
+```hcl
+# Get all assignment filters
+data "microsoft365_graph_beta_device_management_assignment_filter" "all" {
+  filter_type = "all"
+}
+
+# Get specific filter by name
+data "microsoft365_graph_beta_device_management_assignment_filter" "android_specialty" {
+  filter_type  = "display_name"
+  filter_value = "Purpose-built Specialty Devices On Android Device Administrator"
+}
+```
+
+**Attributes:**
+- `id` - Filter ID
+- `display_name` - Filter name
+- `description` - Filter description
+- `platform` - Target platform
+- `rule` - Filter rule expression
+- `assignment_filter_management_type` - Management type
+
+### Enrollment Configurations
+
+#### microsoft365_graph_beta_device_management_device_enrollment_configuration
+
+Query device enrollment configurations.
+
+```hcl
+data "microsoft365_graph_beta_device_management_device_enrollment_configuration" "all" {
+  filter_type = "all"
+}
+```
+
+**Attributes:**
+- `id` - Configuration ID
+- `display_name` - Configuration name
+- `description` - Configuration description
+- `priority` - Priority order
+- `enrollment_configuration_type` - Configuration type
+
+### Role Scope Tags
+
+#### microsoft365_graph_beta_device_management_role_scope_tag
+
+Query role scope tags for RBAC.
+
+```hcl
+data "microsoft365_graph_beta_device_management_role_scope_tag" "all" {
+  filter_type = "all"
+}
+
+data "microsoft365_graph_beta_device_management_role_scope_tag" "default" {
+  filter_type  = "display_name"
+  filter_value = "Default"
+}
+```
+
+**Attributes:**
+- `id` - Tag ID
+- `display_name` - Tag name
+- `description` - Tag description
+
+## Scripts
+
+### Windows Platform Scripts
+
+#### microsoft365_graph_beta_device_management_windows_platform_script
+
+Query PowerShell scripts for Windows devices.
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_platform_script" "all" {
+  filter_type = "all"
+}
+
+data "microsoft365_graph_beta_device_management_windows_platform_script" "by_name" {
+  filter_type  = "display_name"
+  filter_value = "Configure Firewall"
+}
+```
+
+### Windows Remediation Scripts
+
+#### microsoft365_graph_beta_device_management_windows_remediation_script
+
+Query proactive remediation scripts.
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_remediation_script" "all" {
+  filter_type = "all"
+}
+```
+
+### Linux Platform Scripts
+
+#### microsoft365_graph_beta_device_management_linux_platform_script
+
+Query shell scripts for Linux devices.
+
+```hcl
+data "microsoft365_graph_beta_device_management_linux_platform_script" "all" {
+  filter_type = "all"
+}
+```
+
+## Windows Updates
+
+### Update Rings
+
+#### microsoft365_graph_beta_device_management_windows_update_ring
+
+Query Windows Update for Business rings.
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_update_ring" "all" {
+  filter_type = "all"
+}
+
+data "microsoft365_graph_beta_device_management_windows_update_ring" "pilot" {
+  filter_type  = "display_name"
+  filter_value = "Pilot Ring"
+}
+```
+
+### Feature Updates
+
+#### microsoft365_graph_beta_device_management_windows_feature_update_policy
+
+Query Windows feature update policies.
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_feature_update_policy" "all" {
+  filter_type = "all"
+}
+```
+
+### Quality Updates
+
+#### microsoft365_graph_beta_device_management_windows_quality_update_policy
+
+Query Windows quality update policies.
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_quality_update_policy" "all" {
+  filter_type = "all"
+}
+```
+
+#### microsoft365_graph_beta_device_management_windows_quality_update_expedite_policy
+
+Query expedited quality update policies.
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_quality_update_expedite_policy" "all" {
+  filter_type = "all"
+}
+```
+
+### Update Catalog
+
+#### microsoft365_graph_beta_device_management_windows_update_catalog_item
+
+Query Windows Update catalog items.
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_update_catalog_item" "all" {
+  filter_type = "all"
+}
+```
+
+### Driver Updates
+
+#### microsoft365_graph_beta_device_management_windows_driver_update_inventory
+
+Query driver update inventory.
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_driver_update_inventory" "all" {
+  filter_type = "all"
+}
+```
+
+#### microsoft365_graph_beta_device_management_windows_driver_update_profile
+
+Query driver update profiles.
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_driver_update_profile" "all" {
+  filter_type = "all"
+}
+```
+
+## Group Policy
+
+### Group Policy Categories
+
+#### microsoft365_graph_beta_device_management_group_policy_category
+
+Query group policy category definitions.
+
+```hcl
+data "microsoft365_graph_beta_device_management_group_policy_category" "all" {
+  filter_type = "all"
+}
+```
+
+### Group Policy Value References
+
+#### microsoft365_graph_beta_device_management_group_policy_value_reference
+
+Query group policy value references.
+
+```hcl
+data "microsoft365_graph_beta_device_management_group_policy_value_reference" "all" {
+  filter_type = "all"
+}
+```
+
+## Reusable Policy Settings
+
+#### microsoft365_graph_beta_device_management_reuseable_policy_setting
+
+Query reusable policy settings.
+
+```hcl
+data "microsoft365_graph_beta_device_management_reuseable_policy_setting" "all" {
+  filter_type = "all"
+}
+```
+
+## Common Use Cases
+
+### Generate Compliance Report
+
+```hcl
+# Get all managed devices
+data "microsoft365_graph_beta_device_management_managed_device" "all" {
+  filter_type = "all"
+}
+
+# Calculate compliance statistics
+locals {
+  devices_by_os = {
+    for os in distinct([for d in data.microsoft365_graph_beta_device_management_managed_device.all.items : d.operating_system]) :
+    os => [
+      for device in data.microsoft365_graph_beta_device_management_managed_device.all.items :
+      device if device.operating_system == os
+    ]
+  }
+  
+  compliance_by_os = {
+    for os, devices in local.devices_by_os :
+    os => {
+      total      = length(devices)
+      compliant  = length([for d in devices : d if d.compliance_state == "compliant"])
+      percentage = floor((length([for d in devices : d if d.compliance_state == "compliant"]) / length(devices)) * 100)
+    }
+  }
+}
+
+output "compliance_report" {
+  value = local.compliance_by_os
+}
+```
+
+### Find Devices Needing Attention
+
+```hcl
+data "microsoft365_graph_beta_device_management_managed_device" "all" {
+  filter_type = "all"
+}
+
+locals {
+  # Devices that haven't synced in 7 days
+  stale_devices = [
+    for device in data.microsoft365_graph_beta_device_management_managed_device.all.items :
+    device if timecmp(device.last_sync_date_time, timeadd(timestamp(), "-168h")) < 0
+  ]
+  
+  # Non-compliant devices
+  non_compliant = [
+    for device in data.microsoft365_graph_beta_device_management_managed_device.all.items :
+    device if device.compliance_state == "noncompliant"
+  ]
+}
+
+output "devices_needing_attention" {
+  value = {
+    stale_devices     = length(local.stale_devices)
+    non_compliant     = length(local.non_compliant)
+    stale_device_list = [
+      for d in local.stale_devices : {
+        name      = d.device_name
+        user      = d.user_principal_name
+        last_sync = d.last_sync_date_time
+      }
+    ]
+  }
+}
+```
+
+### Reference Assignment Filter in Policy
+
+```hcl
+# Look up existing assignment filter
+data "microsoft365_graph_beta_device_management_assignment_filter" "windows_laptops" {
+  filter_type  = "display_name"
+  filter_value = "Windows Laptops"
+}
+
+# Use in compliance policy
+resource "microsoft365_graph_beta_device_management_compliance_policy" "security" {
+  name = "Security Baseline - Windows Laptops"
+  platform = "windows10"
+  
+  assignments = [
+    {
+      target = {
+        all_devices_assignment = true
+      }
+      filter_id   = data.microsoft365_graph_beta_device_management_assignment_filter.windows_laptops.items[0].id
+      filter_type = "include"
+    }
+  ]
+}
+```
+
+### Get Script for Reference
+
+```hcl
+data "microsoft365_graph_beta_device_management_windows_platform_script" "cleanup" {
+  filter_type  = "display_name"
+  filter_value = "Disk Cleanup Script"
+}
+
+output "script_details" {
+  value = length(data.microsoft365_graph_beta_device_management_windows_platform_script.cleanup.items) > 0 ? {
+    id          = data.microsoft365_graph_beta_device_management_windows_platform_script.cleanup.items[0].id
+    name        = data.microsoft365_graph_beta_device_management_windows_platform_script.cleanup.items[0].display_name
+    description = data.microsoft365_graph_beta_device_management_windows_platform_script.cleanup.items[0].description
+  } : null
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Filter at the Query Level">
+    Use OData filters instead of Terraform filtering when possible:
+    
+    ```hcl
+    # Better - filter at API level
+    data "microsoft365_graph_beta_device_management_managed_device" "windows" {
+      filter_type  = "odata"
+      odata_filter = "operatingSystem eq 'Windows' and complianceState eq 'compliant'"
+    }
+    
+    # Slower - retrieve all then filter
+    data "microsoft365_graph_beta_device_management_managed_device" "all" {
+      filter_type = "all"
+    }
+    
+    locals {
+      windows_compliant = [
+        for d in data.microsoft365_graph_beta_device_management_managed_device.all.items :
+        d if d.operating_system == "Windows" && d.compliance_state == "compliant"
+      ]
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Large Device Inventories">
+    For large tenants, use pagination and selective queries:
+    
+    ```hcl
+    data "microsoft365_graph_beta_device_management_managed_device" "limited" {
+      filter_type   = "odata"
+      odata_filter  = "operatingSystem eq 'Windows'"
+      odata_select  = "id,deviceName,complianceState,lastSyncDateTime"
+      odata_top     = 500
+      odata_orderby = "lastSyncDateTime desc"
+      
+      timeouts {
+        read = "5m"
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cache Device Data">
+    For frequently accessed device data, consider using remote state or external data stores.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Identity & Access Data Sources" icon="id-card" href="/data-sources/identity-access">
+    Query tenant and license information
+  </Card>
+  <Card title="Application Data Sources" icon="grid" href="/data-sources/applications">
+    Retrieve application and service principal data
+  </Card>
+  <Card title="Device Management Resources" icon="laptop" href="/resources/device-management">
+    Manage device policies and configurations
+  </Card>
+  <Card title="Examples" icon="code" href="/examples">
+    Browse complete examples
+  </Card>
+</CardGroup>

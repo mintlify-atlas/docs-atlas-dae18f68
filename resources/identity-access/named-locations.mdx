@@ -1,0 +1,319 @@
+---
+title: Named Locations
+description: Define trusted network locations and countries for conditional access policies
+---
+
+Named locations allow you to define trusted IP ranges and countries that can be referenced in conditional access policies.
+
+## Resources
+
+<Card title="Named Location" icon="location-dot">
+  **Resource**: `microsoft365_graph_beta_identity_and_access_named_location`
+  
+  Create IP-based or country-based named locations.
+</Card>
+
+## IP-Based Named Locations
+
+<CodeGroup>
+```hcl Corporate Headquarters
+resource "microsoft365_graph_beta_identity_and_access_named_location" "corporate_hq" {
+  display_name = "Trusted - Corporate Headquarters"
+  is_trusted   = true
+  
+  ipv4_ranges = [
+    "203.0.113.0/24",
+    "203.0.114.0/24"
+  ]
+  
+  ipv6_ranges = [
+    "2001:db8:1234::/48"
+  ]
+}
+```
+
+```hcl VPN Network
+resource "microsoft365_graph_beta_identity_and_access_named_location" "corporate_vpn" {
+  display_name = "Trusted - Corporate VPN"
+  is_trusted   = true
+  
+  ipv4_ranges = [
+    "10.0.0.0/8"
+  ]
+}
+```
+
+```hcl Branch Offices
+resource "microsoft365_graph_beta_identity_and_access_named_location" "branch_offices" {
+  display_name = "Trusted - Branch Offices"
+  is_trusted   = true
+  
+  ipv4_ranges = [
+    "198.51.100.0/24",  # NY Office
+    "192.0.2.0/24",     # SF Office
+    "203.0.115.0/24"    # London Office
+  ]
+}
+```
+</CodeGroup>
+
+## Country-Based Named Locations
+
+<CodeGroup>
+```hcl Allowed Countries
+resource "microsoft365_graph_beta_identity_and_access_named_location" "allowed_countries" {
+  display_name = "Allowed Countries"
+  
+  countries_and_regions = [
+    "US",  # United States
+    "GB",  # United Kingdom
+    "CA",  # Canada
+    "AU"   # Australia
+  ]
+  
+  include_unknown_countries_and_regions = false
+}
+```
+
+```hcl High-Risk Countries
+resource "microsoft365_graph_beta_identity_and_access_named_location" "high_risk_countries" {
+  display_name = "High-Risk Countries"
+  
+  countries_and_regions = [
+    "KP",  # North Korea
+    "IR",  # Iran
+    "SY"   # Syria
+  ]
+  
+  include_unknown_countries_and_regions = true
+}
+```
+</CodeGroup>
+
+## Trusted vs Non-Trusted Locations
+
+**Trusted Locations** (`is_trusted = true`):
+- Automatically included in the "AllTrusted" built-in location
+- Can be used to bypass certain security controls
+- Should only include highly secure networks (office, VPN)
+
+**Non-Trusted Locations**:
+- Must be referenced explicitly by ID in policies
+- Used for blocking or requiring additional controls
+- Suitable for public networks or untrusted ranges
+
+<Warning>
+  Only IP-based locations support the `is_trusted` attribute. Country-based locations must be referenced explicitly by ID.
+</Warning>
+
+## Use in Conditional Access
+
+### Require MFA from Untrusted Locations
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "mfa_untrusted" {
+  display_name = "Require MFA from Untrusted Locations"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+    }
+    
+    applications = {
+      include_applications = ["All"]
+    }
+    
+    locations = {
+      include_locations = ["All"]
+      exclude_locations = [
+        "AllTrusted",  # Excludes all is_trusted=true locations
+        microsoft365_graph_beta_identity_and_access_named_location.vpn.id
+      ]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["mfa"]
+  }
+}
+```
+
+### Block Access from Specific Countries
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "block_countries" {
+  display_name = "Block High-Risk Countries"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+    }
+    
+    applications = {
+      include_applications = ["All"]
+    }
+    
+    locations = {
+      include_locations = [
+        microsoft365_graph_beta_identity_and_access_named_location.high_risk_countries.id
+      ]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["block"]
+  }
+}
+```
+
+### Allow Only from Approved Countries
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "allowed_countries_only" {
+  display_name = "Allow Only Approved Countries"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+    }
+    
+    applications = {
+      include_applications = ["All"]
+    }
+    
+    locations = {
+      include_locations = ["All"]
+      exclude_locations = [
+        microsoft365_graph_beta_identity_and_access_named_location.allowed_countries.id
+      ]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["block"]
+  }
+}
+```
+
+## Common Scenarios
+
+### Remote Work Setup
+
+```hcl
+# Corporate office
+resource "microsoft365_graph_beta_identity_and_access_named_location" "office" {
+  display_name = "Corporate Office"
+  is_trusted   = true
+  ipv4_ranges  = ["203.0.113.0/24"]
+}
+
+# VPN for remote workers
+resource "microsoft365_graph_beta_identity_and_access_named_location" "vpn" {
+  display_name = "Corporate VPN"
+  is_trusted   = true
+  ipv4_ranges  = ["10.0.0.0/8"]
+}
+
+# Policy: Less strict controls from trusted locations
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "trusted_network" {
+  display_name = "Trusted Network Policy"
+  state        = "enabled"
+  
+  conditions = {
+    users = {
+      include_users = ["All"]
+    }
+    applications = {
+      include_applications = ["All"]
+    }
+    locations = {
+      include_locations = ["AllTrusted"]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["mfa"]  # Just MFA from trusted networks
+  }
+}
+```
+
+### Multi-Region Organization
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_named_location" "americas" {
+  display_name = "Americas Region"
+  countries_and_regions = ["US", "CA", "MX", "BR"]
+}
+
+resource "microsoft365_graph_beta_identity_and_access_named_location" "emea" {
+  display_name = "EMEA Region"
+  countries_and_regions = ["GB", "FR", "DE", "IT", "ES"]
+}
+
+resource "microsoft365_graph_beta_identity_and_access_named_location" "apac" {
+  display_name = "APAC Region"
+  countries_and_regions = ["AU", "JP", "SG", "IN"]
+}
+```
+
+## Country Codes
+
+Use ISO 3166-1 alpha-2 country codes:
+
+| Country | Code |
+|---------|------|
+| United States | US |
+| United Kingdom | GB |
+| Canada | CA |
+| Australia | AU |
+| Germany | DE |
+| France | FR |
+| Japan | JP |
+| Singapore | SG |
+
+[Full list of country codes](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)
+
+## Import Syntax
+
+```bash
+terraform import microsoft365_graph_beta_identity_and_access_named_location.location <location-id>
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Mark only secure networks as trusted">
+    Only set `is_trusted = true` for networks you fully control (offices, VPNs). Never mark public networks as trusted.
+  </Accordion>
+
+  <Accordion title="Keep IP ranges up to date">
+    Regularly review and update IP ranges as your network infrastructure changes.
+  </Accordion>
+
+  <Accordion title="Use descriptive names">
+    Name locations clearly to indicate their purpose (e.g., "Trusted - Corporate HQ" vs "Block - High Risk Countries").
+  </Accordion>
+
+  <Accordion title="Consider IPv6">
+    Include IPv6 ranges where applicable to ensure complete coverage.
+  </Accordion>
+
+  <Accordion title="Test location-based policies">
+    Use report-only mode to validate location detection before enforcing policies.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Conditional Access](/resources/identity-access/conditional-access)
+- [Authentication Strength](/resources/identity-access/authentication-strength)

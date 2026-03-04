@@ -1,0 +1,547 @@
+---
+title: Application Data Sources
+description: Query application registrations, service principals, mobile apps, and app metadata
+icon: grid
+---
+
+# Application Data Sources
+
+Application data sources allow you to query Azure AD application registrations, service principals, Intune mobile apps, and application metadata.
+
+## Azure AD Applications
+
+### microsoft365_graph_beta_applications_application
+
+Query Azure AD application registrations.
+
+**Query Methods:**
+- `object_id` - Query by object ID (most efficient)
+- `app_id` - Query by application (client) ID
+- `display_name` - Query by display name
+- `odata_query` - Advanced OData filter
+
+**Example:**
+
+```hcl
+# Look up application by object ID
+data "microsoft365_graph_beta_applications_application" "by_object_id" {
+  object_id = "00000000-0000-0000-0000-000000000000"
+}
+
+# Look up by application ID
+data "microsoft365_graph_beta_applications_application" "by_app_id" {
+  app_id = "12345678-1234-1234-1234-123456789012"
+}
+
+# Look up by display name
+data "microsoft365_graph_beta_applications_application" "by_name" {
+  display_name = "My Application"
+}
+
+# Advanced OData query
+data "microsoft365_graph_beta_applications_application" "contoso_apps" {
+  odata_query = "startswith(displayName, 'Contoso')"
+}
+
+# Complex OData query with tags
+data "microsoft365_graph_beta_applications_application" "production_apps" {
+  odata_query = "tags/any(t:t eq 'production')"
+}
+```
+
+**Key Attributes:**
+- `id` / `object_id` - Application object ID
+- `app_id` - Application (client) ID
+- `display_name` - Application display name
+- `description` - Application description
+- `sign_in_audience` - Who can sign in (AzureADMyOrg, AzureADMultipleOrgs, etc.)
+- `publisher_domain` - Publisher domain
+- `identifier_uris` - Application ID URIs
+- `tags` - Application tags
+- `web` - Web application settings
+  - `redirect_uris` - Redirect URIs
+  - `implicit_grant_settings` - OAuth implicit grant settings
+- `spa` - Single-page application settings
+  - `redirect_uris` - SPA redirect URIs
+- `public_client` - Public client settings
+  - `redirect_uris` - Public client redirect URIs
+- `required_resource_access` - API permissions
+- `app_roles` - Application roles
+- `oauth2_permission_scopes` - OAuth2 permission scopes
+- `key_credentials` - Certificate credentials
+- `password_credentials` - Client secret credentials
+
+**API Permissions Example:**
+
+```hcl
+data "microsoft365_graph_beta_applications_application" "with_permissions" {
+  display_name = "API Application"
+}
+
+output "api_permissions" {
+  value = [
+    for permission in data.microsoft365_graph_beta_applications_application.with_permissions.required_resource_access : {
+      api = permission.resource_app_id
+      permissions = [
+        for scope in permission.resource_access : {
+          id   = scope.id
+          type = scope.type
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Service Principals
+
+### microsoft365_graph_beta_applications_service_principal
+
+Query service principals (enterprise applications).
+
+**Query Methods:**
+- `object_id` - Query by object ID
+- `app_id` - Query by application ID
+- `display_name` - Query by display name
+- `odata_filter` - Advanced OData filter
+
+**Example:**
+
+```hcl
+# Look up service principal by object ID
+data "microsoft365_graph_beta_applications_service_principal" "by_object_id" {
+  object_id = "00000000-0000-0000-0000-000000000000"
+}
+
+# Look up by application ID
+data "microsoft365_graph_beta_applications_service_principal" "by_app_id" {
+  app_id = "12345678-1234-1234-1234-123456789012"
+}
+
+# Look up by display name
+data "microsoft365_graph_beta_applications_service_principal" "msgraph" {
+  display_name = "Microsoft Graph"
+}
+
+# Advanced OData filter
+data "microsoft365_graph_beta_applications_service_principal" "enabled" {
+  odata_filter = "accountEnabled eq true"
+}
+```
+
+**Key Attributes:**
+- `id` / `object_id` - Service principal object ID
+- `app_id` - Associated application ID
+- `display_name` - Display name
+- `account_enabled` - Whether account is enabled
+- `app_roles` - Application roles
+- `oauth2_permission_scopes` - OAuth2 permission scopes
+- `service_principal_type` - Type (Application, ManagedIdentity, etc.)
+- `tags` - Service principal tags
+- `app_role_assignment_required` - Whether assignment is required
+- `preferred_single_sign_on_mode` - SSO mode
+
+## Intune Mobile Apps
+
+### microsoft365_graph_beta_device_and_app_management_mobile_app
+
+Query mobile applications in Intune.
+
+**Query Methods:**
+- `all` - Get all mobile apps
+- `id` - Query by app ID
+- `display_name` - Filter by display name (partial match)
+- `publisher_name` - Filter by publisher name (partial match)
+- `odata` - Advanced OData filter
+
+**Additional Filters:**
+- `app_type_filter` - Filter by app type (e.g., "win32LobApp", "iosStoreApp")
+
+**Supported App Types:**
+- `win32LobApp` - Windows Win32 LOB apps
+- `macOSPkgApp` - macOS PKG apps
+- `iosStoreApp` - iOS Store apps
+- `androidManagedStoreApp` - Android managed store apps
+- `webApp` - Web apps
+
+**Example:**
+
+```hcl
+# Get all mobile apps
+data "microsoft365_graph_beta_device_and_app_management_mobile_app" "all" {
+  filter_type = "all"
+}
+
+# Get specific app by ID
+data "microsoft365_graph_beta_device_and_app_management_mobile_app" "specific" {
+  filter_type  = "id"
+  filter_value = "b395af0b-910f-40f9-ad74-1cb84406a20f"
+}
+
+# Filter by display name
+data "microsoft365_graph_beta_device_and_app_management_mobile_app" "microsoft_apps" {
+  filter_type  = "display_name"
+  filter_value = "Microsoft"
+}
+
+# Filter by publisher
+data "microsoft365_graph_beta_device_and_app_management_mobile_app" "adobe_apps" {
+  filter_type  = "publisher_name"
+  filter_value = "Adobe"
+}
+
+# Get only Win32 apps
+data "microsoft365_graph_beta_device_and_app_management_mobile_app" "win32" {
+  filter_type     = "all"
+  app_type_filter = "win32LobApp"
+}
+
+# Combine filters - Microsoft Win32 apps
+data "microsoft365_graph_beta_device_and_app_management_mobile_app" "microsoft_win32" {
+  filter_type     = "publisher_name"
+  filter_value    = "Microsoft"
+  app_type_filter = "win32LobApp"
+}
+
+# OData filter - apps created after date
+data "microsoft365_graph_beta_device_and_app_management_mobile_app" "recent" {
+  filter_type  = "odata"
+  odata_filter = "createdDateTime gt 2024-01-01"
+  odata_top    = 10
+}
+```
+
+**Key Attributes:**
+- `id` - App ID
+- `display_name` - App display name
+- `description` - App description
+- `publisher` - Publisher name
+- `developer` - Developer name
+- `owner` - Owner name
+- `notes` - Admin notes
+- `created_date_time` - Creation timestamp
+- `last_modified_date_time` - Last modified timestamp
+- `is_assigned` - Whether app is assigned to groups
+- `is_featured` - Whether app is featured
+- `privacy_information_url` - Privacy policy URL
+- `information_url` - More info URL
+- `categories` - App categories
+- `large_icon` - App icon
+
+**App Inventory Report:**
+
+```hcl
+data "microsoft365_graph_beta_device_and_app_management_mobile_app" "all" {
+  filter_type = "all"
+}
+
+output "app_inventory" {
+  value = [
+    for app in data.microsoft365_graph_beta_device_and_app_management_mobile_app.all.items : {
+      name        = app.display_name
+      publisher   = app.publisher
+      type        = app."@odata.type"
+      assigned    = app.is_assigned
+      featured    = app.is_featured
+      created     = app.created_date_time
+    }
+  ]
+}
+
+# Get only assigned apps
+locals {
+  assigned_apps = [
+    for app in data.microsoft365_graph_beta_device_and_app_management_mobile_app.all.items :
+    app if app.is_assigned == true
+  ]
+}
+
+output "assigned_app_count" {
+  value = length(local.assigned_apps)
+}
+```
+
+### Application Categories
+
+#### microsoft365_graph_beta_device_and_app_management_application_category
+
+Query Intune application categories.
+
+```hcl
+data "microsoft365_graph_beta_device_and_app_management_application_category" "all" {
+  filter_type = "all"
+}
+
+output "available_categories" {
+  value = [
+    for cat in data.microsoft365_graph_beta_device_and_app_management_application_category.all.items : {
+      id   = cat.id
+      name = cat.display_name
+    }
+  ]
+}
+```
+
+### App Relationships
+
+#### microsoft365_graph_beta_device_and_app_management_mobile_app_relationship
+
+Query mobile app relationships (dependencies and supersedence).
+
+```hcl
+data "microsoft365_graph_beta_device_and_app_management_mobile_app_relationship" "all" {
+  filter_type = "all"
+}
+```
+
+#### microsoft365_graph_beta_device_and_app_management_mobile_app_supersedence
+
+Query app supersedence relationships.
+
+```hcl
+data "microsoft365_graph_beta_device_and_app_management_mobile_app_supersedence" "all" {
+  filter_type = "all"
+}
+```
+
+## App Metadata Utilities
+
+The provider includes utility data sources for extracting application metadata:
+
+### microsoft365_utility_itunes_app_metadata
+
+Retrieve iTunes App Store metadata.
+
+```hcl
+data "microsoft365_utility_itunes_app_metadata" "slack" {
+  bundle_id = "com.tinyspeck.chatlyio"
+  country   = "US"
+}
+
+output "slack_app_info" {
+  value = {
+    name         = data.microsoft365_utility_itunes_app_metadata.slack.app_name
+    version      = data.microsoft365_utility_itunes_app_metadata.slack.version
+    bundle_id    = data.microsoft365_utility_itunes_app_metadata.slack.bundle_id
+    developer    = data.microsoft365_utility_itunes_app_metadata.slack.developer
+    description  = data.microsoft365_utility_itunes_app_metadata.slack.description
+  }
+}
+```
+
+### microsoft365_utility_microsoft_store_package_manifest_metadata
+
+Extract Microsoft Store app manifest metadata.
+
+```hcl
+data "microsoft365_utility_microsoft_store_package_manifest_metadata" "app" {
+  package_identifier = "9WZDNCRFJ3Q2"
+}
+```
+
+### microsoft365_utility_windows_msi_app_metadata
+
+Extract metadata from Windows MSI files.
+
+```hcl
+data "microsoft365_utility_windows_msi_app_metadata" "installer" {
+  file_path = "/path/to/installer.msi"
+}
+
+output "msi_info" {
+  value = {
+    product_name    = data.microsoft365_utility_windows_msi_app_metadata.installer.product_name
+    product_version = data.microsoft365_utility_windows_msi_app_metadata.installer.product_version
+    product_code    = data.microsoft365_utility_windows_msi_app_metadata.installer.product_code
+    publisher       = data.microsoft365_utility_windows_msi_app_metadata.installer.publisher
+  }
+}
+```
+
+### microsoft365_utility_macos_pkg_app_metadata
+
+Extract metadata from macOS PKG files.
+
+```hcl
+data "microsoft365_utility_macos_pkg_app_metadata" "installer" {
+  file_path = "/path/to/installer.pkg"
+}
+```
+
+### microsoft365_graph_beta_device_and_app_management_mobile_app_catalog_package
+
+Query mobile app catalog packages.
+
+```hcl
+data "microsoft365_graph_beta_device_and_app_management_mobile_app_catalog_package" "all" {
+  filter_type = "all"
+}
+```
+
+## Common Use Cases
+
+### Find Application Credentials Expiring Soon
+
+```hcl
+data "microsoft365_graph_beta_applications_application" "all_apps" {
+  odata_query = "signInAudience eq 'AzureADMyOrg'"
+}
+
+locals {
+  expiring_secrets = [
+    for app in data.microsoft365_graph_beta_applications_application.all_apps.applications :
+    {
+      app_name = app.display_name
+      app_id   = app.app_id
+      secrets_expiring = [
+        for secret in app.password_credentials :
+        secret if timecmp(secret.end_date_time, timeadd(timestamp(), "720h")) < 0
+      ]
+    }
+    if length([
+      for secret in app.password_credentials :
+      secret if timecmp(secret.end_date_time, timeadd(timestamp(), "720h")) < 0
+    ]) > 0
+  ]
+}
+
+output "apps_with_expiring_secrets" {
+  value       = local.expiring_secrets
+  description = "Applications with secrets expiring in the next 30 days"
+}
+```
+
+### Audit Application Permissions
+
+```hcl
+data "microsoft365_graph_beta_applications_application" "production_apps" {
+  odata_query = "tags/any(t:t eq 'production')"
+}
+
+output "app_permissions_audit" {
+  value = {
+    for app in data.microsoft365_graph_beta_applications_application.production_apps.applications :
+    app.display_name => {
+      app_id = app.app_id
+      api_permissions = [
+        for api in app.required_resource_access : {
+          api_id = api.resource_app_id
+          scopes = [
+            for permission in api.resource_access :
+            permission.id
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+### Mobile App Deployment Report
+
+```hcl
+data "microsoft365_graph_beta_device_and_app_management_mobile_app" "all" {
+  filter_type = "all"
+}
+
+locals {
+  apps_by_type = {
+    for type in distinct([
+      for app in data.microsoft365_graph_beta_device_and_app_management_mobile_app.all.items :
+      app."@odata.type"
+    ]) :
+    type => [
+      for app in data.microsoft365_graph_beta_device_and_app_management_mobile_app.all.items :
+      app if app."@odata.type" == type
+    ]
+  }
+}
+
+output "app_deployment_summary" {
+  value = {
+    total_apps = length(data.microsoft365_graph_beta_device_and_app_management_mobile_app.all.items)
+    assigned_apps = length([
+      for app in data.microsoft365_graph_beta_device_and_app_management_mobile_app.all.items :
+      app if app.is_assigned
+    ])
+    by_type = {
+      for type, apps in local.apps_by_type :
+      type => {
+        total    = length(apps)
+        assigned = length([for app in apps : app if app.is_assigned])
+      }
+    }
+  }
+}
+```
+
+### Reference Application in Policy
+
+```hcl
+# Look up existing application
+data "microsoft365_graph_beta_applications_application" "corporate_portal" {
+  display_name = "Company Portal"
+}
+
+# Use in conditional access policy
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "mfa" {
+  display_name = "Require MFA for Company Portal"
+  state        = "enabled"
+  
+  conditions = {
+    applications = {
+      include_applications = [data.microsoft365_graph_beta_applications_application.corporate_portal.app_id]
+    }
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use App ID for Service Principals">
+    When querying both applications and service principals, use app_id for consistency:
+    
+    ```hcl
+    data "microsoft365_graph_beta_applications_application" "app" {
+      app_id = "12345678-1234-1234-1234-123456789012"
+    }
+    
+    data "microsoft365_graph_beta_applications_service_principal" "sp" {
+      app_id = "12345678-1234-1234-1234-123456789012"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Filter Apps by Type">
+    Use app_type_filter to reduce query time and state file size:
+    
+    ```hcl
+    data "microsoft365_graph_beta_device_and_app_management_mobile_app" "win32_only" {
+      filter_type     = "all"
+      app_type_filter = "win32LobApp"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Monitor Credential Expiration">
+    Regularly check for expiring certificates and secrets to prevent service disruptions.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Device Management Data Sources" icon="laptop" href="/data-sources/device-management">
+    Query devices and policies
+  </Card>
+  <Card title="Identity & Access Data Sources" icon="id-card" href="/data-sources/identity-access">
+    Retrieve tenant and license information
+  </Card>
+  <Card title="Application Resources" icon="grid" href="/resources/applications">
+    Manage applications and service principals
+  </Card>
+  <Card title="Examples" icon="code" href="/examples">
+    Browse complete examples
+  </Card>
+</CardGroup>

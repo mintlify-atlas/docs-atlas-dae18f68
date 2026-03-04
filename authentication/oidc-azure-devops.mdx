@@ -1,0 +1,222 @@
+---
+title: Azure DevOps OIDC Authentication
+description: Azure DevOps Pipelines OIDC authentication with service connections
+---
+
+The Microsoft 365 provider supports authentication using Azure DevOps Pipelines' OpenID Connect (OIDC) tokens. This approach allows Terraform to authenticate to Microsoft 365 services directly from Azure DevOps pipelines without storing long-lived credentials as pipeline variables or service connections.
+
+## How Azure DevOps OIDC Works
+
+<Steps>
+  <Step title="Token Generation">
+    Azure DevOps Pipelines generates a short-lived OIDC token for each pipeline run
+  </Step>
+  
+  <Step title="Token Request">
+    The Microsoft 365 provider requests this token during Terraform execution
+  </Step>
+  
+  <Step title="Present Token">
+    The provider presents the token to Microsoft Entra ID
+  </Step>
+  
+  <Step title="Trust Relationship">
+    Based on a pre-configured trust relationship, Entra ID issues a Microsoft Graph access token
+  </Step>
+  
+  <Step title="API Calls">
+    The provider uses this token to authenticate API requests
+  </Step>
+</Steps>
+
+## Prerequisites
+
+- An Azure DevOps organization and project
+- Permissions to create and configure app registrations in Microsoft Entra ID
+- Ability to modify Azure DevOps pipelines
+- Permissions to create service connections in Azure DevOps
+
+## Setup
+
+<Steps>
+  <Step title="Create App Registration">
+    ```bash
+    # Set variables
+    TENANT_ID="00000000-0000-0000-0000-000000000000"
+    APP_NAME="terraform-m365-provider"
+    
+    # Create app registration
+    APP_ID=$(az ad app create --display-name $APP_NAME --query appId -o tsv)
+    
+    # Create service principal
+    az ad sp create --id $APP_ID
+    
+    # Grant API permissions
+    az ad app permission add \
+      --id $APP_ID \
+      --api 00000003-0000-0000-c000-000000000000 \
+      --api-permissions 9241abd9-d0e6-425a-bd4f-47ba86e767a4=Role
+    
+    # Grant admin consent
+    az ad app permission admin-consent --id $APP_ID
+    ```
+  </Step>
+  
+  <Step title="Create Service Connection">
+    In your Azure DevOps project:
+    
+    1. Go to **Project settings** > **Service connections**
+    2. Click **New service connection** > **Azure Resource Manager**
+    3. Select **Workload Identity federation (manual)**
+    4. Fill in:
+       - **Service connection name**: e.g., "M365Provider"
+       - **Subscription ID**: Your Azure subscription ID
+       - **Tenant ID**: Your Microsoft Entra ID tenant ID
+       - **Service principal client ID**: The app registration client ID
+       - **Issuer**: Your Azure DevOps org URL
+       - **Subject**: Service connection identifier
+  </Step>
+  
+  <Step title="Configure Federated Credential">
+    ```bash
+    # Set variables
+    ADO_ORG="your-azure-devops-org"
+    ADO_PROJECT="your-azure-devops-project"
+    SERVICE_CONNECTION_NAME="M365Provider"
+    
+    # Create federated credential
+    az ad app federated-credential create \
+      --id $APP_ID \
+      --parameters "{\"name\":\"ado-federated-credential\",\"issuer\":\"https://vstoken.dev.azure.com/${ADO_ORG}\",\"subject\":\"sc://${ADO_ORG}/${ADO_PROJECT}/${SERVICE_CONNECTION_NAME}\",\"audiences\":[\"api://AzureADTokenExchange\"]}"
+    ```
+  </Step>
+</Steps>
+
+## Azure DevOps Pipeline Configuration
+
+```yaml
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  serviceConnectionId: 'M365Provider'
+  
+steps:
+- task: TerraformInstaller@0
+  inputs:
+    terraformVersion: 'latest'
+
+- task: TerraformTaskV3@3
+  displayName: 'Terraform init'
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    backendServiceArm: '$(serviceConnectionId)'
+    backendAzureRmResourceGroupName: 'your-resource-group'
+    backendAzureRmStorageAccountName: 'your-storage-account'
+    backendAzureRmContainerName: 'tfstate'
+    backendAzureRmKey: 'terraform.tfstate'
+
+- task: TerraformTaskV3@3
+  displayName: 'Terraform apply'
+  inputs:
+    provider: 'azurerm'
+    command: 'apply'
+    environmentServiceNameAzureRM: '$(serviceConnectionId)'
+  env:
+    M365_TENANT_ID: '$(tenantId)'
+    M365_AUTH_METHOD: 'oidc_azure_devops'
+    M365_CLIENT_ID: '$(clientId)'
+    M365_ADO_SERVICE_CONNECTION_ID: '$(serviceConnectionId)'
+```
+
+## Provider Configuration
+
+<Tabs>
+  <Tab title="Environment Variables (Recommended)">
+    ```bash
+    export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_AUTH_METHOD="oidc_azure_devops"
+    export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_ADO_SERVICE_CONNECTION_ID="M365Provider"
+    # Alternative Azure ARM environment variables
+    export ARM_ADO_PIPELINE_SERVICE_CONNECTION_ID="M365Provider"
+    export ARM_OIDC_AZURE_SERVICE_CONNECTION_ID="M365Provider"
+    ```
+    
+    ```terraform
+    provider "microsoft365" {}
+    ```
+  </Tab>
+  
+  <Tab title="Terraform Configuration">
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "oidc_azure_devops"
+      tenant_id   = "00000000-0000-0000-0000-000000000000"
+      entra_id_options = {
+        client_id                 = "00000000-0000-0000-0000-000000000000"
+        ado_service_connection_id = "M365Provider"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Required Pipeline Environment Variables
+
+Azure DevOps automatically sets the following environment variables required for OIDC authentication:
+
+- `SYSTEM_ACCESSTOKEN`: Token used to authenticate to Azure DevOps services
+- `SYSTEM_OIDCREQUESTURI`: URI to request OIDC tokens
+
+<Note>
+These variables are automatically available to your Terraform commands in most tasks.
+</Note>
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Pipeline Conditions" icon="code-branch">
+    Restrict which branches or paths can trigger the pipeline
+  </Card>
+  
+  <Card title="Approval Gates" icon="shield-check">
+    Use environments with approval gates for sensitive operations
+  </Card>
+  
+  <Card title="Conditional Access" icon="filter">
+    Configure additional conditions in Microsoft Entra ID
+  </Card>
+  
+  <Card title="Least Privilege" icon="user-lock">
+    Grant only minimum required API permissions
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Authentication failed">
+    Verify the federated credential is configured correctly in Entra ID with matching issuer and subject values.
+  </Accordion>
+  
+  <Accordion title="Service connection issues">
+    Check the service connection configuration in Azure DevOps. Ensure it's properly configured for workload identity federation.
+  </Accordion>
+  
+  <Accordion title="Permission denied">
+    Ensure you've granted admin consent for the required Microsoft Graph permissions in your app registration.
+  </Accordion>
+  
+  <Accordion title="Missing environment variables">
+    Verify that `SYSTEM_ACCESSTOKEN` and `SYSTEM_OIDCREQUESTURI` are set and accessible in your pipeline. Some custom tasks may not pass these through automatically.
+  </Accordion>
+  
+  <Accordion title="Subject or issuer mismatch">
+    Double-check that the subject and issuer values match between Azure DevOps and the federated credential in Entra ID.
+  </Accordion>
+</AccordionGroup>

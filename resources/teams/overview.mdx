@@ -1,0 +1,72 @@
+---
+title: Microsoft Teams Overview
+description: Manage Microsoft Teams teams, channels, and settings
+icon: comments
+---
+
+Microsoft Teams resources enable you to manage team creation, channel configuration, and Teams settings.
+
+## Resource Categories
+
+<CardGroup cols={3}>
+  <Card title="Teams" icon="users-rectangle" href="/resources/teams/teams">
+    Create and manage teams
+  </Card>
+  <Card title="Channels" icon="hashtag" href="/resources/teams/channels">
+    Manage team channels
+  </Card>
+  <Card title="Settings" icon="gear" href="/resources/teams/settings">
+    Configure Teams policies
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+Microsoft Teams are built on top of Microsoft 365 Groups. Creating a team requires a group:
+
+```hcl
+# Create M365 group
+resource "microsoft365_graph_beta_groups_group" "team_group" {
+  display_name     = "Project Alpha Team"
+  mail_nickname    = "project-alpha"
+  description      = "Project Alpha collaboration space"
+  mail_enabled     = true
+  security_enabled = false
+  group_types      = ["Unified"]
+}
+
+# Note: Team creation resources would be used here
+# Check the Teams resources page for team-specific configuration
+```
+
+## Teams Policies
+
+Configure organization-wide Teams settings:
+
+```hcl
+# Teams calling policy
+resource "microsoft365_powershell_microsoft_teams_teams_calling_policy" "default" {
+  identity = "Global"
+  # Policy settings
+}
+
+# Teams meeting policy
+resource "microsoft365_powershell_microsoft_teams_teams_meeting_policy" "default" {
+  identity = "Global"
+  # Policy settings
+}
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Teams" href="/resources/teams/teams">
+    Create teams
+  </Card>
+  <Card title="Channels" href="/resources/teams/channels">
+    Add channels
+  </Card>
+  <Card title="Settings" href="/resources/teams/settings">
+    Configure policies
+  </Card>
+</CardGroup>

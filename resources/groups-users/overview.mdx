@@ -1,0 +1,62 @@
+---
+title: Groups & Users Overview
+description: Manage Azure AD groups, users, and membership
+icon: users
+---
+
+Groups and Users resources enable you to manage identities, organize users into groups, and control group membership.
+
+## Resource Categories
+
+<CardGroup cols={3}>
+  <Card title="Groups" icon="users" href="/resources/groups-users/groups">
+    Create and manage Azure AD groups
+  </Card>
+  <Card title="Users" icon="user" href="/resources/groups-users/users">
+    Manage user accounts
+  </Card>
+  <Card title="Membership" icon="user-plus" href="/resources/groups-users/membership">
+    Control group membership
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+### Create Group with Members
+
+```hcl
+# Create group
+resource "microsoft365_graph_beta_groups_group" "engineering" {
+  display_name     = "Engineering Team"
+  mail_nickname    = "engineering"
+  description      = "Engineering department group"
+  security_enabled = true
+  mail_enabled     = false
+}
+
+# Add members
+resource "microsoft365_graph_beta_groups_group_member_assignment" "member1" {
+  group_id  = microsoft365_graph_beta_groups_group.engineering.id
+  member_id = microsoft365_graph_beta_users_user.engineer1.id
+}
+
+# Add owner
+resource "microsoft365_graph_beta_groups_group_owner_assignment" "owner" {
+  group_id = microsoft365_graph_beta_groups_group.engineering.id
+  owner_id = microsoft365_graph_beta_users_user.manager.id
+}
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Groups" href="/resources/groups-users/groups">
+    Create groups
+  </Card>
+  <Card title="Users" href="/resources/groups-users/users">
+    Manage users
+  </Card>
+  <Card title="Membership" href="/resources/groups-users/membership">
+    Add members
+  </Card>
+</CardGroup>

@@ -1,0 +1,328 @@
+---
+title: App Assignments
+description: Deploy and assign mobile applications to users and devices
+---
+
+App assignment resources enable you to deploy applications to users and devices with flexible targeting options and install intents.
+
+## Available Resources
+
+<Card title="Mobile App Assignment" icon="arrow-right-to-bracket">
+  **Resource**: `microsoft365_graph_beta_device_and_app_management_mobile_app_assignment`
+  
+  Assign mobile apps to users, devices, or groups with customizable settings.
+</Card>
+
+## Assignment Example
+
+<CodeGroup>
+```hcl Assign to All Devices
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "firefox_all_devices" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.firefox.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type                                      = "allDevices"
+    device_and_app_management_assignment_filter_type = "none"
+  }
+}
+```
+
+```hcl Assign to All Licensed Users
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "firefox_all_users" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.firefox.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type                                      = "allLicensedUsers"
+    device_and_app_management_assignment_filter_type = "none"
+  }
+}
+```
+
+```hcl Assign to Specific Group
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "firefox_group" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win_get_app.firefox.id
+  intent        = "available"
+  source        = "direct"
+  
+  target = {
+    target_type                                      = "groupAssignment"
+    group_id                                         = "2c39cf3d-78ef-4227-acb1-3a14fc7fbb99"
+    device_and_app_management_assignment_filter_type = "none"
+  }
+}
+```
+
+```hcl With Assignment Filter
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "firefox_filtered" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win_get_app.firefox.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type                                      = "groupAssignment"
+    group_id                                         = "7e30b7f0-b2f1-4220-883f-f1d8066eef2d"
+    device_and_app_management_assignment_filter_id   = "80f8c0a5-f3ec-4936-bcbc-420dc0ca3665"
+    device_and_app_management_assignment_filter_type = "include"
+  }
+}
+```
+</CodeGroup>
+
+## Install Intents
+
+Configure how the app should be deployed:
+
+| Intent | Description | User Action Required |
+|--------|-------------|---------------------|
+| `required` | App installs automatically | No |
+| `available` | App available in Company Portal | Yes |
+| `uninstall` | App is removed from devices | No |
+| `availableWithoutEnrollment` | Available without device enrollment | Yes |
+
+### Required Intent
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "required_app" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.app.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type = "allDevices"
+  }
+}
+```
+
+### Available Intent
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "available_app" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win_get_app.app.id
+  intent        = "available"
+  source        = "direct"
+  
+  target = {
+    target_type = "allLicensedUsers"
+  }
+}
+```
+
+### Uninstall Intent
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "uninstall_app" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.old_app.id
+  intent        = "uninstall"
+  source        = "direct"
+  
+  target = {
+    target_type = "groupAssignment"
+    group_id    = microsoft365_graph_beta_groups_group.pilot.id
+  }
+}
+```
+
+## Target Types
+
+Define who or what receives the app:
+
+| Target Type | Description | Requires Group ID |
+|-------------|-------------|------------------|
+| `allDevices` | All enrolled devices | No |
+| `allLicensedUsers` | All users with Intune licenses | No |
+| `groupAssignment` | Specific Azure AD group | Yes |
+| `exclusionGroupAssignment` | Exclude specific group | Yes |
+
+## Assignment Settings
+
+Different app types support different assignment settings:
+
+### WinGet App Settings
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "winget_with_settings" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win_get_app.app.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type = "allDevices"
+  }
+  
+  settings = {
+    win_get = {
+      notifications = "showAll"
+      install_time_settings = {
+        use_local_time     = true
+        deadline_date_time = "2025-06-01T18:00:00Z"
+      }
+      restart_settings = {
+        grace_period_in_minutes                         = 240
+        countdown_display_before_restart_in_minutes     = 30
+        restart_notification_snooze_duration_in_minutes = 60
+      }
+    }
+  }
+}
+```
+
+### iOS Store App Settings
+
+```hcl
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "ios_with_settings" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_ios_store_app.app.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type = "groupAssignment"
+    group_id    = microsoft365_graph_beta_groups_group.ios_users.id
+  }
+  
+  settings = {
+    ios_store = {
+      is_removable                = true
+      prevent_managed_app_backup  = false
+      uninstall_on_device_removal = true
+      vpn_configuration_id        = "80f8c0a5-f3ec-4936-bcbc-420dc0ca3665"
+    }
+  }
+}
+```
+
+## Assignment Filters
+
+Use assignment filters for granular targeting:
+
+```hcl
+# Create assignment filter
+resource "microsoft365_graph_beta_device_management_assignment_filter" "windows_11" {
+  display_name = "Windows 11 Devices"
+  description  = "Filter for Windows 11 devices only"
+  platform     = "windows10AndLater"
+  
+  rule = "(device.osVersion -startsWith \"10.0.22\") or (device.osVersion -startsWith \"10.0.23\")"
+}
+
+# Use filter in assignment
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "filtered_assignment" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.app.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type                                      = "allDevices"
+    device_and_app_management_assignment_filter_id   = microsoft365_graph_beta_device_management_assignment_filter.windows_11.id
+    device_and_app_management_assignment_filter_type = "include"
+  }
+}
+```
+
+## Exclusion Groups
+
+```hcl
+# Assign to all users
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "all_users" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.app.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type = "allLicensedUsers"
+  }
+}
+
+# Exclude specific group
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "exclude_pilots" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.app.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type = "exclusionGroupAssignment"
+    group_id    = microsoft365_graph_beta_groups_group.pilot_users.id
+  }
+}
+```
+
+## Multiple Assignments
+
+You can create multiple assignments for the same app:
+
+```hcl
+# Required for IT department
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "it_required" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.app.id
+  intent        = "required"
+  source        = "direct"
+  
+  target = {
+    target_type = "groupAssignment"
+    group_id    = microsoft365_graph_beta_groups_group.it_department.id
+  }
+}
+
+# Available for all other users
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "others_available" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.app.id
+  intent        = "available"
+  source        = "direct"
+  
+  target = {
+    target_type = "allLicensedUsers"
+  }
+}
+
+# Exclude executives
+resource "microsoft365_graph_beta_device_and_app_management_mobile_app_assignment" "exclude_execs" {
+  mobile_app_id = microsoft365_graph_beta_device_and_app_management_win32_app.app.id
+  intent        = "available"
+  source        = "direct"
+  
+  target = {
+    target_type = "exclusionGroupAssignment"
+    group_id    = microsoft365_graph_beta_groups_group.executives.id
+  }
+}
+```
+
+## Import Syntax
+
+```bash
+terraform import microsoft365_graph_beta_device_and_app_management_mobile_app_assignment.example <app-id>_<assignment-id>
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start with pilot groups">
+    Deploy apps to small pilot groups first before expanding to larger populations.
+  </Accordion>
+
+  <Accordion title="Use assignment filters for precision">
+    Leverage assignment filters to target specific OS versions, device models, or other attributes.
+  </Accordion>
+
+  <Accordion title="Plan exclusion strategy">
+    Use exclusion groups to prevent app deployment to specific users or devices that shouldn't receive the app.
+  </Accordion>
+
+  <Accordion title="Monitor deployment status">
+    Regularly check app installation status and failures through Intune reporting.
+  </Accordion>
+
+  <Accordion title="Set appropriate deadlines">
+    For required apps, give users adequate time to install before enforcement deadlines.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Mobile Apps](/resources/device-app-management/mobile-apps) - App resources to assign
+- [App Configuration](/resources/device-app-management/app-configuration) - Configure app settings
+- [Assignment Filters](/resources/device-management/enrollment) - Create assignment filters
+- [Groups](/resources/groups-users/groups) - Manage assignment target groups

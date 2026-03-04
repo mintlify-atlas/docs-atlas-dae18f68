@@ -1,0 +1,189 @@
+---
+title: Provider Configuration
+description: Core configuration options for the Microsoft 365 Terraform Provider
+---
+
+The Microsoft 365 provider supports several top-level configuration options that control authentication, cloud environment, and general provider behavior.
+
+## Basic Configuration
+
+```hcl
+provider "microsoft365" {
+  cloud            = "public"
+  tenant_id        = "00000000-0000-0000-0000-000000000000"
+  auth_method      = "client_secret"
+  telemetry_optout = false
+  debug_mode       = false
+
+  entra_id_options = {
+    client_id     = "00000000-0000-0000-0000-000000000000"
+    client_secret = "your-client-secret"
+  }
+
+  client_options = {
+    enable_retry = true
+    max_retries  = 3
+  }
+}
+```
+
+## Configuration Parameters
+
+<ParamField path="cloud" type="string" default="public">
+  Specifies the Microsoft cloud environment for authentication and API requests. This setting determines the endpoints used for Microsoft Graph and Graph Beta APIs.
+  
+  Valid values:
+  - `public` - Microsoft Azure Public Cloud (default)
+  - `dod` - US Department of Defense (DoD) Cloud
+  - `gcc` - US Government Cloud
+  - `gcchigh` - US Government High Cloud
+  - `china` - China Cloud
+  - `ex` - EagleX Cloud
+  - `rx` - Secure Cloud (RX)
+  
+  Can be set using the `M365_CLOUD` environment variable.
+</ParamField>
+
+<ParamField path="tenant_id" type="string" required>
+  The Microsoft 365 tenant ID for the Entra ID (formerly Azure AD) application. This GUID uniquely identifies your Entra ID instance.
+  
+  To find your tenant ID:
+  1. Log in to the [Azure portal](https://portal.azure.com)
+  2. Navigate to 'Microsoft Entra ID' (formerly Azure Active Directory)
+  3. In the Overview page, look for 'Tenant ID'
+  
+  Alternatively, you can use PowerShell:
+  ```powershell
+  Connect-AzAccount
+  (Get-AzContext).Tenant.Id
+  ```
+  
+  Can be set using the `M365_TENANT_ID` environment variable.
+</ParamField>
+
+<ParamField path="auth_method" type="string" required>
+  The authentication method to use for the Entra ID application to authenticate the provider.
+  
+  Supported methods:
+  - `azure_developer_cli` - Uses the identity logged into the Azure Developer CLI (azd)
+  - `azure_cli` - Uses the identity logged into the Azure CLI (az)
+  - `device_code` - Uses a device code flow for authentication
+  - `client_secret` - Uses a client ID and secret for authentication
+  - `client_certificate` - Uses a client certificate (.pfx) for authentication
+  - `interactive_browser` - Opens a browser for interactive login
+  - `workload_identity` - Uses workload identity federation for Kubernetes pods
+  - `managed_identity` - Uses Azure managed identity for authentication
+  - `oidc` - Uses generic OpenID Connect (OIDC) authentication
+  - `oidc_github` - Uses GitHub Actions-specific OIDC authentication
+  - `oidc_azure_devops` - Uses Azure DevOps-specific OIDC authentication
+  
+  Each method requires different credentials to be provided in the `entra_id_options` block.
+  
+  Can be set using the `M365_AUTH_METHOD` environment variable.
+</ParamField>
+
+<ParamField path="telemetry_optout" type="boolean" default="false">
+  Controls the collection of telemetry data for the Microsoft 365 provider by Microsoft Services.
+  
+  **Usage:**
+  - Set to `true` to disable all telemetry collection
+  - Set to `false` (default) to allow telemetry collection
+  
+  **Privacy:**
+  - Telemetry, when enabled, may include provider version, Terraform version, and general usage patterns
+  - No personally identifiable information (PII) or sensitive data is collected
+  
+  **Recommendations:**
+  - For development or non-sensitive environments, consider leaving telemetry enabled to support product improvement
+  - For production or sensitive environments, you may choose to opt out
+  
+  Can be set using the `M365_TELEMETRY_OPTOUT` environment variable.
+</ParamField>
+
+<ParamField path="debug_mode" type="boolean" default="false">
+  Flag to enable debug mode for the provider. This setting enables additional logging and diagnostics for the provider.
+  
+  Can be set using the `M365_DEBUG_MODE` environment variable.
+</ParamField>
+
+<ParamField path="entra_id_options" type="object">
+  Configuration options for Entra ID authentication. The required attributes depend on the selected `auth_method`.
+  
+  See [Authentication Methods](/authentication/overview) for detailed configuration examples for each authentication method.
+</ParamField>
+
+<ParamField path="client_options" type="object">
+  Configuration options for the Microsoft Graph client, including retry behavior, compression, proxy settings, and more.
+  
+  See [Client Options](/configuration/client-options) for detailed configuration.
+</ParamField>
+
+## Complete Example
+
+```hcl
+terraform {
+  required_providers {
+    microsoft365 = {
+      source  = "deploymenttheory/microsoft365"
+      version = "~> 0.40.0"
+    }
+  }
+}
+
+provider "microsoft365" {
+  cloud            = "public"
+  tenant_id        = var.tenant_id
+  auth_method      = "client_secret"
+  telemetry_optout = false
+  debug_mode       = false
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+
+  client_options = {
+    enable_retry        = true
+    max_retries         = 3
+    retry_delay_seconds = 5
+    enable_compression  = true
+    timeout_seconds     = 300
+  }
+}
+```
+
+## Using Variables
+
+<Warning>
+Never commit sensitive values like client secrets, certificates, or passwords directly in your configuration files. Always use environment variables or Terraform's encrypted state management features.
+</Warning>
+
+```hcl
+variable "tenant_id" {
+  description = "The M365 tenant ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "client_id" {
+  description = "The client ID for the Entra ID application"
+  type        = string
+  sensitive   = true
+}
+
+variable "client_secret" {
+  description = "The client secret for the Entra ID application"
+  type        = string
+  sensitive   = true
+}
+
+provider "microsoft365" {
+  tenant_id   = var.tenant_id
+  auth_method = "client_secret"
+
+  entra_id_options = {
+    client_id     = var.client_id
+    client_secret = var.client_secret
+  }
+}
+```

@@ -1,0 +1,243 @@
+---
+title: Generic OIDC Authentication
+description: OpenID Connect federation for custom identity providers
+---
+
+The Microsoft 365 provider supports authentication using generic OpenID Connect (OIDC) tokens. This approach allows for federated authentication from any OIDC-compatible identity provider, enabling secure authentication without managing long-lived secrets.
+
+<Note>
+Generic OIDC authentication is particularly valuable for custom CI/CD pipelines, enterprise identity systems, and security-focused environments where eliminating static credentials is a priority.
+</Note>
+
+## How Generic OIDC Works
+
+<Steps>
+  <Step title="Generate Token">
+    A trusted OIDC provider (identity provider) generates a JWT token
+  </Step>
+  
+  <Step title="Token Claims">
+    The token contains claims about the identity (issuer, subject, audience)
+  </Step>
+  
+  <Step title="Provide Token">
+    The token is provided to the Microsoft 365 provider via a file or environment variable
+  </Step>
+  
+  <Step title="Exchange Token">
+    The provider exchanges this token for a Microsoft Graph access token based on a pre-configured trust relationship
+  </Step>
+  
+  <Step title="API Calls">
+    All API calls use the acquired token for authorization
+  </Step>
+</Steps>
+
+## Prerequisites
+
+- An OIDC token provider capable of generating valid JWTs
+- Permissions to create and configure app registrations in Microsoft Entra ID
+- Ability to configure federated identity credentials
+
+## Common Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Custom CI/CD" icon="gears">
+    Self-hosted Jenkins, TeamCity, or other CI/CD platforms
+  </Card>
+  
+  <Card title="Enterprise Identity" icon="building">
+    Integration with existing corporate identity providers
+  </Card>
+  
+  <Card title="Zero Trust" icon="shield-halved">
+    Security-focused environments implementing zero-trust principles
+  </Card>
+  
+  <Card title="Custom Workflows" icon="diagram-project">
+    Internal developer platforms or automation frameworks
+  </Card>
+</CardGroup>
+
+## Setup
+
+<Tabs>
+  <Tab title="Using Azure CLI">
+    ```bash
+    # Set variables
+    TENANT_ID="00000000-0000-0000-0000-000000000000"
+    APP_NAME="terraform-provider-microsoft365"
+    
+    # Create app registration
+    APP_ID=$(az ad app create --display-name $APP_NAME --query appId -o tsv)
+    APP_OBJECT_ID=$(az ad app show --id $APP_ID --query id -o tsv)
+    
+    # Create service principal
+    az ad sp create --id $APP_ID
+    
+    # Grant API permissions
+    az ad app permission add \
+      --id $APP_ID \
+      --api 00000003-0000-0000-c000-000000000000 \
+      --api-permissions 9241abd9-d0e6-425a-bd4f-47ba86e767a4=Role
+    
+    # Grant admin consent
+    az ad app permission admin-consent --id $APP_ID
+    
+    # Configure federated credential
+    az ad app federated-credential create \
+      --id $APP_OBJECT_ID \
+      --parameters "{\"name\":\"generic-oidc-credential\",\"issuer\":\"https://token.issuer.example.com\",\"subject\":\"specific-subject-claim\",\"audiences\":[\"api://AzureADTokenExchange\"]}"
+    ```
+  </Tab>
+  
+  <Tab title="Using Terraform">
+    ```terraform
+    # Create app registration
+    resource "azuread_application" "terraform_m365" {
+      display_name = "terraform-m365-provider"
+    }
+    
+    # Create service principal
+    resource "azuread_service_principal" "terraform_m365" {
+      application_id = azuread_application.terraform_m365.application_id
+    }
+    
+    # Add API permissions
+    resource "azuread_application_api_permission" "graph_permissions" {
+      application_object_id = azuread_application.terraform_m365.object_id
+      api_id = "00000003-0000-0000-c000-000000000000"
+      
+      api_permissions {
+        id   = "9241abd9-d0e6-425a-bd4f-47ba86e767a4"
+        type = "Role"
+      }
+    }
+    
+    # Add federated identity credential
+    resource "azuread_application_federated_identity_credential" "generic_oidc" {
+      application_object_id = azuread_application.terraform_m365.object_id
+      display_name          = "generic-oidc-credential"
+      audiences             = ["api://AzureADTokenExchange"]
+      issuer                = "https://token.issuer.example.com"
+      subject               = "specific-subject-claim"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Token Requirements
+
+The OIDC token must include these claims:
+
+- `iss` (issuer): Must match the issuer configured in the federated credential
+- `sub` (subject): Must match the subject configured in the federated credential
+- `aud` (audience): Typically "api://AzureADTokenExchange"
+- `exp` (expiration time): Token expiration timestamp
+- `iat` (issued at): Token issuance timestamp
+
+## Provider Configuration
+
+<Tabs>
+  <Tab title="Environment Variables (Recommended)">
+    ```bash
+    export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_AUTH_METHOD="oidc"
+    export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_OIDC_TOKEN_FILE_PATH="/path/to/oidc-token.jwt"
+    ```
+    
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "oidc"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Terraform Configuration">
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "oidc"
+      tenant_id   = "00000000-0000-0000-0000-000000000000"
+      entra_id_options = {
+        client_id            = "00000000-0000-0000-0000-000000000000"
+        oidc_token_file_path = "/path/to/oidc-token.jwt"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Token File Format
+
+The OIDC token file should contain a valid JWT token as plain text:
+
+```
+eyJhbGciOiJSUzI1NiIsImtpZCI6IkMyRjU2RDU1MkYyQzNCQzg2MDI4MjRCNjA2QkM3NzdDIiwidHlwIjoiSldUIn0.eyJpc3MiOiJodHRwczovL3Rva2VuLmlzc3Vlci5leGFtcGxlLmNvbSIsInN1YiI6InNwZWNpZmljLXN1YmplY3QtY2xhaW0iLCJhdWQiOiJhcGk6Ly9BenVyZUFEVG9rZW5FeGNoYW5nZSIsImV4cCI6MTY5OTEyMzQ1NiwiaWF0IjoxNjk5MTIzMTU2fQ.signature
+```
+
+## HashiCorp Vault Integration
+
+### Generate OIDC Token from Vault
+
+```bash
+# Generate token from Vault
+AZURE_OIDC_TOKEN=$(vault read -field=token identity/oidc/token/azure-role)
+
+# Save to file
+echo $AZURE_OIDC_TOKEN > /path/to/oidc-token.jwt
+```
+
+### Vault Agent Integration
+
+```hcl
+template {
+  destination = "/path/to/env-file.sh"
+  contents = <<EOT
+  export M365_TENANT_ID={{with secret "secret/microsoft365/config"}}{{.Data.data.tenant_id}}{{end}}
+  export M365_CLIENT_ID={{with secret "secret/microsoft365/config"}}{{.Data.data.client_id}}{{end}}
+  export M365_AUTH_METHOD="oidc"
+  
+  # Get OIDC token and save to file
+  OIDC_TOKEN={{with secret "identity/oidc/token/azure-role"}}{{.Data.token}}{{end}}
+  echo "$OIDC_TOKEN" > /tmp/oidc-token.jwt
+  export M365_OIDC_TOKEN_FILE_PATH="/tmp/oidc-token.jwt"
+  EOT
+}
+```
+
+## Security Considerations
+
+<Warning>
+**Security Best Practices**
+
+- **Token Lifetime**: OIDC tokens should have a short lifetime (typically under 1 hour)
+- **Token Storage**: Protect access to the token file using file system permissions (chmod 600)
+- **Subject Specificity**: Be as specific as possible with the subject claim
+- **Conditional Access**: Implement conditional access policies in Microsoft Entra ID
+- **Audit Logging**: Enable comprehensive logging for authentication events
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Invalid token">
+    Ensure the token is valid and not expired. Check the `exp` claim in the JWT.
+  </Accordion>
+  
+  <Accordion title="Token not found">
+    Verify the path to the token file is correct and the file exists.
+  </Accordion>
+  
+  <Accordion title="Authentication failed">
+    Check that the issuer, subject, and audience in the token match the federated credential configuration.
+  </Accordion>
+  
+  <Accordion title="Missing claims">
+    Verify your token includes all required claims (iss, sub, aud, exp, iat).
+  </Accordion>
+  
+  <Accordion title="Token signature validation failed">
+    Ensure your token is properly signed with a supported algorithm (RS256).
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,250 @@
+---
+title: Azure Developer CLI Authentication
+description: Use Azure Developer CLI authentication for local development
+---
+
+The Microsoft 365 provider can leverage the Azure Developer CLI (azd) authentication to simplify the development experience. This method uses the existing authenticated session from the Azure Developer CLI, making it ideal for local development scenarios.
+
+## How It Works
+
+This authentication method leverages the Azure Developer CLI authentication, which stores tokens in a local credential cache:
+
+<Steps>
+  <Step title="Check Authentication">
+    The provider checks if the Azure Developer CLI is installed and authenticated
+  </Step>
+  
+  <Step title="Use Existing Credential">
+    It uses the existing credential to acquire tokens for Microsoft Graph
+  </Step>
+  
+  <Step title="No App Registration">
+    No additional app registrations or secrets are required
+  </Step>
+</Steps>
+
+### Benefits
+
+- Eliminates the need to create and manage separate app registrations
+- Removes the need to handle sensitive client secrets or certificates
+- Uses the same authentication context as your other Azure development tools
+- Supports automatic token renewal when tokens expire
+
+## Prerequisites
+
+- [Azure Developer CLI (azd)](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) installed
+- Successfully authenticated with `azd auth login`
+- A Microsoft Entra ID tenant
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Local Development" icon="laptop-code">
+    Quick setup for development environments
+  </Card>
+  
+  <Card title="Prototyping" icon="flask">
+    Rapidly test Terraform configurations without overhead
+  </Card>
+  
+  <Card title="Cross-service Dev" icon="layer-group">
+    Maintain consistent auth when working with Azure and M365 resources
+  </Card>
+  
+  <Card title="Testing" icon="vial">
+    Simplified authentication for debugging issues
+  </Card>
+</CardGroup>
+
+## Setup
+
+### Install Azure Developer CLI
+
+Follow the [Azure Developer CLI installation guide](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) for your operating system.
+
+Verify installation:
+
+```bash
+azd version
+```
+
+### Authenticate
+
+```bash
+# Basic authentication to your default tenant
+azd auth login
+
+# Or specify a tenant ID
+azd auth login --tenant-id 00000000-0000-0000-0000-000000000000
+```
+
+<Info>
+No additional app registration setup is required for this authentication method.
+</Info>
+
+## Provider Configuration
+
+<Tabs>
+  <Tab title="Environment Variables (Recommended)">
+    ```bash
+    export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_AUTH_METHOD="azure_developer_cli"
+    ```
+    
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "azure_developer_cli"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Terraform Configuration">
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "azure_developer_cli"
+      tenant_id   = "00000000-0000-0000-0000-000000000000"
+      entra_id_options = {
+        additionally_allowed_tenants = ["*"] # Optional: multi-tenant access
+      }
+      debug_mode = true # Optional: enable for troubleshooting
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## VS Code Integration
+
+Create a `.vscode/tasks.json` file to streamline your workflow:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Terraform Init and Apply",
+      "type": "shell",
+      "command": "terraform init && terraform apply -auto-approve",
+      "options": {
+        "env": {
+          "M365_AUTH_METHOD": "azure_developer_cli",
+          "M365_TENANT_ID": "your-tenant-id-here"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Terraform Plan",
+      "type": "shell",
+      "command": "terraform plan",
+      "options": {
+        "env": {
+          "M365_AUTH_METHOD": "azure_developer_cli",
+          "M365_TENANT_ID": "your-tenant-id-here"
+        }
+      },
+      "problemMatcher": []
+    }
+  ]
+}
+```
+
+Access tasks in VS Code:
+1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS)
+2. Type "Tasks: Run Task"
+3. Select your desired task
+
+## Switching Between Auth Methods
+
+Create a shell script to easily switch profiles:
+
+```bash
+#!/bin/bash
+# switch-auth-method.sh
+
+case "$1" in
+  dev)
+    export M365_AUTH_METHOD="azure_developer_cli"
+    echo "Switched to developer mode using Azure Developer CLI authentication"
+    ;;
+  prod)
+    export M365_AUTH_METHOD="client_secret"
+    export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_CLIENT_SECRET="$(cat ~/.secrets/m365_client_secret)"
+    echo "Switched to production mode using service principal authentication"
+    ;;
+  *)
+    echo "Usage: $0 {dev|prod}"
+    exit 1
+    ;;
+esac
+```
+
+## Limitations
+
+<Warning>
+**Important Limitations**
+
+- Requires Azure Developer CLI to be installed and available in PATH
+- Only works for interactive development scenarios
+- Uses the permissions of the currently logged-in user
+- Not suitable for automated workflows or CI/CD pipelines
+- Sessions might expire, requiring re-authentication
+- Less control over token lifetimes and authentication parameters
+- Not recommended for production deployment scenarios
+</Warning>
+
+## Security Considerations
+
+- Azure Developer CLI stores tokens in a local credential cache, which is encrypted
+- The authentication uses the developer's own user account
+- Actions performed will be attributable to that user
+- Token refresh is handled automatically
+- Ensure your user account follows the principle of least privilege
+- For shared or public computers, be cautious of leaving authenticated sessions active
+- Log out when finished: `azd auth logout`
+- For production environments, use dedicated service principal authentication
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Azure Developer CLI not found">
+    Error: `Failed to create credential strategy: azure developer cli not found in PATH`
+    
+    Ensure that `azd` is installed and available in your system PATH. Verify with:
+    ```bash
+    azd version
+    ```
+  </Accordion>
+  
+  <Accordion title="Authentication expired">
+    Error: `Failed to get token: azure developer cli not authenticated`
+    
+    Run `azd auth login` to authenticate before using Terraform.
+  </Accordion>
+  
+  <Accordion title="Multiple tenant scenarios">
+    Error: `Failed to get token: tenant ID mismatch`
+    
+    If you work with multiple tenants, authenticate to the specific tenant:
+    ```bash
+    azd auth login --tenant-id <tenant-id>
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission errors">
+    Error: `Insufficient privileges to complete the operation`
+    
+    The authenticated user must have the necessary permissions for Microsoft Graph operations. Check your user permissions in the Microsoft Entra admin center.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+Enable debug mode for detailed logging:
+
+```terraform
+provider "microsoft365" {
+  auth_method = "azure_developer_cli"
+  debug_mode  = true
+}
+```
+</Tip>

@@ -1,0 +1,111 @@
+---
+title: Group Resources
+description: Create and manage Azure AD groups
+---
+
+## Resources
+
+<Card title="Group" icon="users">
+  **Resource**: `microsoft365_graph_beta_groups_group`
+  
+  Create and manage security groups, Microsoft 365 groups, and distribution lists.
+</Card>
+
+## Security Group
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "security" {
+  display_name     = "Security Team"
+  mail_nickname    = "security-team"
+  description      = "Security department"
+  security_enabled = true
+  mail_enabled     = false
+}
+```
+
+## Microsoft 365 Group
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "m365" {
+  display_name     = "Marketing Team"
+  mail_nickname    = "marketing"
+  description      = "Marketing department collaboration"
+  mail_enabled     = true
+  security_enabled = false
+  
+  group_types = ["Unified"]
+  
+  visibility = "Private"
+}
+```
+
+## Dynamic Group (Users)
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "dynamic_users" {
+  display_name     = "All Engineers"
+  mail_nickname    = "all-engineers"
+  security_enabled = true
+  mail_enabled     = false
+  
+  group_types = ["DynamicMembership"]
+  
+  membership_rule = "(user.department -eq \"Engineering\")"
+  membership_rule_processing_state = "On"
+}
+```
+
+## Dynamic Group (Devices)
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "windows_devices" {
+  display_name     = "All Windows Devices"
+  mail_nickname    = "windows-devices"
+  security_enabled = true
+  mail_enabled     = false
+  
+  group_types = ["DynamicMembership"]
+  
+  membership_rule = "(device.deviceOSType -eq \"Windows\")"
+  membership_rule_processing_state = "On"
+}
+```
+
+## Role-Assignable Group
+
+```hcl
+resource "microsoft365_graph_beta_groups_group" "admins" {
+  display_name     = "Global Administrators"
+  mail_nickname    = "global-admins"
+  security_enabled = true
+  mail_enabled     = false
+  
+  is_assignable_to_role = true
+}
+```
+
+## Group Lifecycle Policy
+
+```hcl
+resource "microsoft365_graph_beta_groups_group_lifecycle_expiration_policy" "m365_policy" {
+  group_lifetime_in_days          = 365
+  managed_group_types             = "Selected"
+  alternate_notification_emails   = "groupadmins@contoso.com"
+}
+
+resource "microsoft365_graph_beta_groups_group_lifecycle_expiration_policy_assignment" "assignment" {
+  policy_id = microsoft365_graph_beta_groups_group_lifecycle_expiration_policy.m365_policy.id
+  group_id  = microsoft365_graph_beta_groups_group.m365.id
+}
+```
+
+## Import Syntax
+
+```bash
+terraform import microsoft365_graph_beta_groups_group.group <group-object-id>
+```
+
+## Related Resources
+
+- [Users](/resources/groups-users/users)
+- [Membership](/resources/groups-users/membership)

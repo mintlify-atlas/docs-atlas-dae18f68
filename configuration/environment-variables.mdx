@@ -1,0 +1,447 @@
+---
+title: Environment Variables
+description: Environment variables reference for the Microsoft 365 Terraform Provider
+---
+
+The Microsoft 365 provider supports environment variables for all configuration options. Using environment variables is the recommended approach for sensitive information like client secrets and certificates.
+
+<Note>
+Environment variables can be overridden by values specified directly in the provider configuration block.
+</Note>
+
+## Core Provider Variables
+
+### M365_CLOUD
+The cloud environment to use for authentication and API requests.
+
+**Valid values:** `public`, `dod`, `gcc`, `gcchigh`, `china`, `ex`, `rx`  
+**Default:** `public`
+
+```bash
+export M365_CLOUD="public"
+```
+
+### M365_TENANT_ID
+The Microsoft 365 tenant ID for the Entra ID application.
+
+**Format:** GUID (00000000-0000-0000-0000-000000000000)  
+**Required:** Yes
+
+```bash
+export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+```
+
+### M365_AUTH_METHOD
+The authentication method to use for the provider.
+
+**Valid values:** `azure_developer_cli`, `azure_cli`, `device_code`, `client_secret`, `client_certificate`, `interactive_browser`, `workload_identity`, `managed_identity`, `oidc`, `oidc_github`, `oidc_azure_devops`  
+**Required:** Yes
+
+```bash
+export M365_AUTH_METHOD="client_secret"
+```
+
+### M365_DEBUG_MODE
+Enable debug mode for additional logging and diagnostics.
+
+**Valid values:** `true`, `false`  
+**Default:** `false`
+
+```bash
+export M365_DEBUG_MODE="true"
+```
+
+### M365_TELEMETRY_OPTOUT
+Opt out of telemetry collection.
+
+**Valid values:** `true`, `false`  
+**Default:** `false`
+
+```bash
+export M365_TELEMETRY_OPTOUT="false"
+```
+
+## Entra ID Authentication Variables
+
+### M365_CLIENT_ID
+The application (client) ID for the Entra ID application.
+
+**Format:** GUID (00000000-0000-0000-0000-000000000000)  
+**Used with:** Most authentication methods
+
+```bash
+export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+```
+
+### M365_CLIENT_SECRET
+The client secret value for client secret authentication.
+
+**Used with:** `client_secret` authentication method  
+**Sensitive:** Yes
+
+```bash
+export M365_CLIENT_SECRET="your-client-secret-value"
+```
+
+### M365_CLIENT_CERTIFICATE_FILE_PATH
+Path to the PKCS#12 (.pfx or .p12) certificate file.
+
+**Used with:** `client_certificate` authentication method  
+**Sensitive:** Yes
+
+```bash
+export M365_CLIENT_CERTIFICATE_FILE_PATH="/path/to/certificate.pfx"
+```
+
+### M365_CLIENT_CERTIFICATE_PASSWORD
+Password for the certificate file.
+
+**Used with:** `client_certificate` authentication method  
+**Sensitive:** Yes
+
+```bash
+export M365_CLIENT_CERTIFICATE_PASSWORD="cert-password"
+```
+
+### M365_SEND_CERTIFICATE_CHAIN
+Whether to send the certificate chain in token requests.
+
+**Valid values:** `true`, `false`  
+**Default:** `false`  
+**Used with:** `client_certificate` authentication method
+
+```bash
+export M365_SEND_CERTIFICATE_CHAIN="true"
+```
+
+### M365_USERNAME
+Username for authentication.
+
+**Used with:** `interactive_browser` authentication method
+
+```bash
+export M365_USERNAME="user@example.com"
+```
+
+### M365_REDIRECT_URL
+Redirect URL for interactive browser authentication.
+
+**Used with:** `interactive_browser` authentication method
+
+```bash
+export M365_REDIRECT_URL="http://localhost:8000/auth/callback"
+```
+
+### M365_DISABLE_INSTANCE_DISCOVERY
+Disable instance discovery for disconnected or private clouds.
+
+**Valid values:** `true`, `false`  
+**Default:** `false`
+
+```bash
+export M365_DISABLE_INSTANCE_DISCOVERY="true"
+```
+
+### M365_ADDITIONALLY_ALLOWED_TENANTS
+Comma-separated list of additional tenant IDs allowed for authentication.
+
+```bash
+export M365_ADDITIONALLY_ALLOWED_TENANTS="tenant-id-1,tenant-id-2"
+```
+
+## Managed Identity Variables
+
+### M365_MANAGED_IDENTITY_ID
+ID of a user-assigned managed identity.
+
+**Used with:** `managed_identity` authentication method  
+**Format:** GUID or Azure resource ID
+
+```bash
+# Using client ID
+export M365_MANAGED_IDENTITY_ID="00000000-0000-0000-0000-000000000000"
+
+# Using resource ID
+export M365_MANAGED_IDENTITY_ID="/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}"
+```
+
+### AZURE_CLIENT_ID
+Alternative variable name for managed identity client ID.
+
+**Used with:** `managed_identity` authentication method
+
+```bash
+export AZURE_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+```
+
+## Workload Identity Variables
+
+### AZURE_FEDERATED_TOKEN_FILE
+Path to a Kubernetes service account token file.
+
+**Used with:** `workload_identity` authentication method  
+**Default:** `/var/run/secrets/azure/tokens/azure-identity-token`
+
+```bash
+export AZURE_FEDERATED_TOKEN_FILE="/var/run/secrets/azure/tokens/azure-identity-token"
+```
+
+## OIDC Variables
+
+### M365_OIDC_TOKEN_FILE_PATH
+Path to a file containing an OIDC token.
+
+**Used with:** `oidc` authentication method
+
+```bash
+export M365_OIDC_TOKEN_FILE_PATH="/path/to/oidc-token"
+```
+
+### M365_OIDC_REQUEST_TOKEN
+The bearer token for the request to the OIDC provider.
+
+**Used with:** `oidc`, `oidc_github` authentication methods  
+**Sensitive:** Yes
+
+```bash
+export M365_OIDC_REQUEST_TOKEN="token-value"
+```
+
+### M365_OIDC_REQUEST_URL
+The URL for the OIDC provider from which to request an ID token.
+
+**Used with:** `oidc`, `oidc_github` authentication methods
+
+```bash
+export M365_OIDC_REQUEST_URL="https://oidc-provider.example.com"
+```
+
+### ACTIONS_ID_TOKEN_REQUEST_TOKEN
+GitHub Actions-specific token variable (automatically set by GitHub).
+
+**Used with:** `oidc_github` authentication method
+
+### ACTIONS_ID_TOKEN_REQUEST_URL
+GitHub Actions-specific URL variable (automatically set by GitHub).
+
+**Used with:** `oidc_github` authentication method
+
+## Azure DevOps Variables
+
+### ARM_ADO_PIPELINE_SERVICE_CONNECTION_ID
+Azure DevOps service connection ID for OIDC authentication.
+
+**Used with:** `oidc_azure_devops` authentication method
+
+```bash
+export ARM_ADO_PIPELINE_SERVICE_CONNECTION_ID="connection-id"
+```
+
+### ARM_OIDC_AZURE_SERVICE_CONNECTION_ID
+Alternative variable name for Azure DevOps service connection ID.
+
+**Used with:** `oidc_azure_devops` authentication method
+
+```bash
+export ARM_OIDC_AZURE_SERVICE_CONNECTION_ID="connection-id"
+```
+
+## Client Options Variables
+
+### M365_ENABLE_HEADERS_INSPECTION
+Enable inspection of HTTP headers.
+
+**Valid values:** `true`, `false`  
+**Default:** `false`
+
+```bash
+export M365_ENABLE_HEADERS_INSPECTION="true"
+```
+
+### M365_ENABLE_RETRY
+Enable automatic retries for failed requests.
+
+**Valid values:** `true`, `false`  
+**Default:** `true`
+
+```bash
+export M365_ENABLE_RETRY="true"
+```
+
+### M365_MAX_RETRIES
+Maximum number of retries for failed requests.
+
+**Type:** Integer  
+**Default:** `3`
+
+```bash
+export M365_MAX_RETRIES="5"
+```
+
+### M365_RETRY_DELAY_SECONDS
+Delay between retry attempts in seconds.
+
+**Type:** Integer  
+**Default:** `5`
+
+```bash
+export M365_RETRY_DELAY_SECONDS="10"
+```
+
+### M365_ENABLE_REDIRECT
+Enable automatic following of redirects.
+
+**Valid values:** `true`, `false`  
+**Default:** `true`
+
+```bash
+export M365_ENABLE_REDIRECT="true"
+```
+
+### M365_MAX_REDIRECTS
+Maximum number of redirects to follow.
+
+**Type:** Integer  
+**Default:** `5`
+
+```bash
+export M365_MAX_REDIRECTS="10"
+```
+
+### M365_ENABLE_COMPRESSION
+Enable compression for HTTP requests and responses.
+
+**Valid values:** `true`, `false`  
+**Default:** `true`
+
+```bash
+export M365_ENABLE_COMPRESSION="true"
+```
+
+### M365_CUSTOM_USER_AGENT
+Custom User-Agent string to be sent with requests.
+
+```bash
+export M365_CUSTOM_USER_AGENT="MyApp/1.0"
+```
+
+### M365_TIMEOUT_SECONDS
+Timeout for requests in seconds.
+
+**Type:** Integer  
+**Default:** `300`
+
+```bash
+export M365_TIMEOUT_SECONDS="600"
+```
+
+## Proxy Variables
+
+### M365_USE_PROXY
+Enable the use of a proxy for network requests.
+
+**Valid values:** `true`, `false`  
+**Default:** `false`
+
+```bash
+export M365_USE_PROXY="true"
+```
+
+### M365_PROXY_URL
+The URL of the proxy server.
+
+**Format:** Full URL including scheme (http:// or https://)
+
+```bash
+export M365_PROXY_URL="http://proxy.example.com:8080"
+```
+
+### M365_PROXY_USERNAME
+Username for proxy authentication.
+
+```bash
+export M365_PROXY_USERNAME="proxyuser"
+```
+
+### M365_PROXY_PASSWORD
+Password for proxy authentication.
+
+**Sensitive:** Yes
+
+```bash
+export M365_PROXY_PASSWORD="proxypass"
+```
+
+## Chaos Testing Variables
+
+<Warning>
+Chaos testing variables are for testing purposes only. Do not enable in production environments.
+</Warning>
+
+### M365_ENABLE_CHAOS
+Enable the chaos handler for testing purposes.
+
+**Valid values:** `true`, `false`  
+**Default:** `false`
+
+```bash
+export M365_ENABLE_CHAOS="true"
+```
+
+### M365_CHAOS_PERCENTAGE
+Percentage of requests to apply chaos testing to.
+
+**Type:** Integer (0-100)  
+**Default:** `10`
+
+```bash
+export M365_CHAOS_PERCENTAGE="20"
+```
+
+### M365_CHAOS_STATUS_CODE
+HTTP status code to return for chaos-affected requests.
+
+**Type:** Integer  
+**Default:** Random error code
+
+```bash
+export M365_CHAOS_STATUS_CODE="503"
+```
+
+### M365_CHAOS_STATUS_MESSAGE
+Custom status message to return for chaos-affected requests.
+
+```bash
+export M365_CHAOS_STATUS_MESSAGE="Simulated server overload"
+```
+
+## Example: Complete Environment Setup
+
+```bash
+#!/bin/bash
+# Microsoft 365 Terraform Provider Configuration
+
+# Core Provider Settings
+export M365_CLOUD="public"
+export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+export M365_AUTH_METHOD="client_secret"
+
+# Authentication
+export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+export M365_CLIENT_SECRET="your-client-secret"
+
+# Provider Settings
+export M365_DEBUG_MODE="false"
+export M365_TELEMETRY_OPTOUT="false"
+
+# Client Options
+export M365_ENABLE_RETRY="true"
+export M365_MAX_RETRIES="3"
+export M365_RETRY_DELAY_SECONDS="5"
+export M365_ENABLE_COMPRESSION="true"
+export M365_TIMEOUT_SECONDS="300"
+
+# Proxy (if needed)
+# export M365_USE_PROXY="true"
+# export M365_PROXY_URL="http://proxy.example.com:8080"
+```

@@ -1,0 +1,174 @@
+---
+title: Interactive Browser Authentication
+description: Authenticate using interactive browser login for local development
+---
+
+The Microsoft 365 provider can authenticate using an interactive browser session. This method automatically opens a web browser to authenticate the user and is ideal for local development scenarios.
+
+## Prerequisites
+
+- A Microsoft Entra ID tenant
+- Permissions to create an app registration in your tenant
+- Access to a web browser on the machine running Terraform
+
+## Setup
+
+<Steps>
+  <Step title="Create App Registration">
+    [Create an app registration in Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
+  </Step>
+  
+  <Step title="Configure Authentication">
+    - Under "Authentication", add a platform configuration for "Web"
+    - Add a redirect URI (e.g., `http://localhost:8888`)
+    - Ensure "Access tokens" and "ID tokens" are checked under "Implicit grant and hybrid flows"
+  </Step>
+  
+  <Step title="Add API Permissions">
+    - Navigate to "API permissions"
+    - Click "Add a permission" and select "Microsoft Graph"
+    - Choose "Delegated permissions" (interactive browser uses delegated permissions)
+    - Add the necessary permissions
+    - Click "Grant admin consent"
+  </Step>
+</Steps>
+
+## Provider Configuration
+
+<Tabs>
+  <Tab title="Environment Variables (Recommended)">
+    ```bash
+    export M365_TENANT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_AUTH_METHOD="interactive_browser"
+    export M365_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+    export M365_REDIRECT_URL="http://localhost:8888"
+    export M365_USERNAME="user@domain.com"  # Optional login hint
+    ```
+    
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "interactive_browser"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Terraform Configuration">
+    ```terraform
+    provider "microsoft365" {
+      auth_method = "interactive_browser"
+      tenant_id   = "00000000-0000-0000-0000-000000000000"
+      entra_id_options = {
+        client_id    = "00000000-0000-0000-0000-000000000000"
+        redirect_url = "http://localhost:8888"
+        username     = "user@domain.com"  # Optional login hint
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Usage Workflow
+
+When you run Terraform with interactive browser authentication:
+
+<Steps>
+  <Step title="Browser Opens">
+    The provider will automatically open your default web browser
+  </Step>
+  
+  <Step title="Redirect to Login">
+    You'll be directed to the Microsoft login page
+  </Step>
+  
+  <Step title="Authenticate">
+    After successful authentication, you'll be redirected to the configured redirect URL
+  </Step>
+  
+  <Step title="Success Message">
+    The browser may display a success message or a blank page
+  </Step>
+  
+  <Step title="Continue">
+    Terraform will continue once authentication is complete
+  </Step>
+</Steps>
+
+## Configuration Options
+
+### Login Hint
+
+You can provide a `username` to pre-populate the login page:
+
+```terraform
+entra_id_options = {
+  username = "user@domain.com"
+}
+```
+
+### Redirect URL
+
+The `redirect_url` must exactly match one of the redirect URIs configured in your app registration:
+
+```terraform
+entra_id_options = {
+  redirect_url = "http://localhost:8888"
+}
+```
+
+<Warning>
+Ensure the redirect URL matches exactly, including protocol (http/https) and any trailing slashes.
+</Warning>
+
+## Use Cases
+
+Interactive browser authentication is ideal for:
+
+<CardGroup cols={2}>
+  <Card title="Local Development" icon="laptop-code">
+    Rapid development and testing on your local machine
+  </Card>
+  
+  <Card title="Testing" icon="vial">
+    Testing and troubleshooting configurations
+  </Card>
+  
+  <Card title="First-time Setup" icon="wrench">
+    Initial setup and configuration
+  </Card>
+  
+  <Card title="User-specific Permissions" icon="user-lock">
+    Scenarios requiring user-specific permissions
+  </Card>
+</CardGroup>
+
+## Security Considerations
+
+<Info>
+**Security Notes**
+
+- This method grants permissions based on the authenticated user's privileges
+- For automated processes, use client secret, certificate, or OIDC authentication
+- The default token lifetime is one hour
+- For shared machines, be cautious as the browser may retain cookies
+- Always log out when finished
+</Info>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Browser doesn't open">
+    The provider may not be able to launch a browser automatically. Manually open the browser and navigate to the URL displayed in the logs.
+  </Accordion>
+  
+  <Accordion title="Redirect error">
+    Ensure the redirect URL in your configuration exactly matches the one in your app registration, including protocol (http/https) and any trailing slashes.
+  </Accordion>
+  
+  <Accordion title="Permission denied">
+    Ensure you've granted admin consent for the required permissions in your app registration.
+  </Accordion>
+  
+  <Accordion title="Browser automation blocked">
+    Some security tools may block automated browser launching. In these cases, use device code authentication instead.
+  </Accordion>
+</AccordionGroup>

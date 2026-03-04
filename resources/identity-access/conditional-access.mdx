@@ -1,0 +1,489 @@
+---
+title: Conditional Access Policies
+description: Control access to your applications based on signals like user, location, device, and risk
+---
+
+Conditional access policies are the foundation of a zero-trust security model, allowing you to enforce access controls based on real-time conditions.
+
+## Resources
+
+<Card title="Conditional Access Policy" icon="shield-check">
+  **Resource**: `microsoft365_graph_beta_identity_and_access_conditional_access_policy`
+  
+  Create and manage conditional access policies for Entra ID.
+</Card>
+
+## Basic Policy Example
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "require_mfa" {
+  display_name = "Require MFA for All Users"
+  state        = "enabled"
+  
+  conditions = {
+    client_app_types = ["all"]
+    
+    users = {
+      include_users = ["All"]
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+    }
+    
+    applications = {
+      include_applications = ["All"]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["mfa"]
+  }
+}
+```
+
+## Policy States
+
+| State | Description | Use Case |
+|-------|-------------|----------|
+| `enabled` | Policy is active and enforced | Production policies |
+| `disabled` | Policy exists but not enforced | Temporarily disabled |
+| `enabledForReportingButNotEnforced` | Report-only mode | Testing new policies |
+
+## User Conditions
+
+<CodeGroup>
+```hcl All Users
+users = {
+  include_users = ["All"]
+  exclude_groups = [
+    microsoft365_graph_beta_groups_group.breakglass.id
+  ]
+}
+```
+
+```hcl Specific Groups
+users = {
+  include_groups = [
+    microsoft365_graph_beta_groups_group.admins.id,
+    microsoft365_graph_beta_groups_group.executives.id
+  ]
+  exclude_groups = [
+    microsoft365_graph_beta_groups_group.excluded.id
+  ]
+}
+```
+
+```hcl Directory Roles
+users = {
+  include_roles = [
+    data.microsoft365_graph_beta_identity_and_access_role_definitions.global_admin.items[0].id,
+    data.microsoft365_graph_beta_identity_and_access_role_definitions.security_admin.items[0].id
+  ]
+}
+```
+
+```hcl Exclude Guests
+users = {
+  include_users = ["All"]
+  exclude_guests_or_external_users = {
+    guest_or_external_user_types = [
+      "internalGuest",
+      "b2bCollaborationGuest",
+      "b2bCollaborationMember"
+    ]
+    external_tenants = {
+      membership_kind = "all"
+    }
+  }
+}
+```
+</CodeGroup>
+
+## Application Conditions
+
+<CodeGroup>
+```hcl All Applications
+applications = {
+  include_applications = ["All"]
+}
+```
+
+```hcl Office 365
+applications = {
+  include_applications = ["Office365"]
+}
+```
+
+```hcl Specific Apps
+applications = {
+  include_applications = [
+    data.microsoft365_graph_beta_applications_service_principal.sharepoint.items[0].app_id,
+    data.microsoft365_graph_beta_applications_service_principal.exchange.items[0].app_id
+  ]
+}
+```
+
+```hcl User Actions
+applications = {
+  include_user_actions = [
+    "urn:user:registersecurityinfo",
+    "urn:user:registerdevice"
+  ]
+}
+```
+</CodeGroup>
+
+## Platform Conditions
+
+```hcl
+conditions = {
+  platforms = {
+    include_platforms = ["windows", "macOS"]
+    exclude_platforms = ["iOS", "android"]
+  }
+}
+```
+
+Available platforms:
+- `windows`
+- `macOS`
+- `iOS`
+- `android`
+- `linux`
+- `all`
+
+## Location Conditions
+
+```hcl
+conditions = {
+  locations = {
+    include_locations = ["All"]
+    exclude_locations = [
+      "AllTrusted",
+      microsoft365_graph_beta_identity_and_access_named_location.corporate_hq.id
+    ]
+  }
+}
+```
+
+## Device Conditions
+
+```hcl
+# Device filter
+conditions = {
+  devices = {
+    device_filter = {
+      mode = "exclude"
+      rule = "device.isCompliant -eq True -or device.trustType -eq \"ServerAD\""
+    }
+  }
+}
+```
+
+## Risk-Based Conditions
+
+```hcl
+conditions = {
+  sign_in_risk_levels = ["high", "medium"]
+  user_risk_levels    = ["high"]
+}
+```
+
+Risk levels:
+- `low`
+- `medium`
+- `high`
+- `hidden`
+- `none`
+
+## Grant Controls
+
+### Block Access
+
+```hcl
+grant_controls = {
+  operator          = "OR"
+  built_in_controls = ["block"]
+}
+```
+
+### Require MFA
+
+```hcl
+grant_controls = {
+  operator          = "OR"
+  built_in_controls = ["mfa"]
+}
+```
+
+### Require Compliant Device
+
+```hcl
+grant_controls = {
+  operator          = "OR"
+  built_in_controls = ["compliantDevice"]
+}
+```
+
+### Require Hybrid Azure AD Join
+
+```hcl
+grant_controls = {
+  operator          = "OR"
+  built_in_controls = ["domainJoinedDevice"]
+}
+```
+
+### Multiple Requirements (AND)
+
+```hcl
+grant_controls = {
+  operator          = "AND"
+  built_in_controls = ["mfa", "compliantDevice"]
+}
+```
+
+### Authentication Strength
+
+```hcl
+grant_controls = {
+  operator = "OR"
+  authentication_strength = {
+    id = microsoft365_graph_beta_identity_and_access_authentication_strength_policy.phishing_resistant.id
+  }
+}
+```
+
+### Require App Protection Policy
+
+```hcl
+grant_controls = {
+  operator          = "OR"
+  built_in_controls = ["compliantApplication"]
+}
+```
+
+## Session Controls
+
+### Sign-in Frequency
+
+```hcl
+session_controls = {
+  sign_in_frequency = {
+    value               = 4
+    type                = "hours"
+    authentication_type = "primaryAndSecondaryAuthentication"
+    frequency_interval  = "timeBased"
+    is_enabled          = true
+  }
+}
+```
+
+### Sign-in Every Time
+
+```hcl
+session_controls = {
+  sign_in_frequency = {
+    authentication_type = "primaryAndSecondaryAuthentication"
+    frequency_interval  = "everyTime"
+    is_enabled          = true
+  }
+}
+```
+
+### Persistent Browser Session
+
+```hcl
+session_controls = {
+  persistent_browser = {
+    mode       = "never"  # or "always"
+    is_enabled = true
+  }
+}
+```
+
+### Application Enforced Restrictions
+
+```hcl
+session_controls = {
+  application_enforced_restrictions = {
+    is_enabled = true
+  }
+}
+```
+
+## Common Policy Scenarios
+
+### Block Legacy Authentication
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "block_legacy_auth" {
+  display_name = "Block Legacy Authentication"
+  state        = "enabled"
+  
+  conditions = {
+    client_app_types = ["exchangeActiveSync", "other"]
+    
+    users = {
+      include_users = ["All"]
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+    }
+    
+    applications = {
+      include_applications = ["All"]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["block"]
+  }
+}
+```
+
+### Require MFA for Admins
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "admin_mfa" {
+  display_name = "Require MFA for Administrators"
+  state        = "enabled"
+  
+  conditions = {
+    client_app_types = ["all"]
+    
+    users = {
+      include_roles = [
+        data.microsoft365_graph_beta_identity_and_access_role_definitions.global_admin.items[0].id,
+        data.microsoft365_graph_beta_identity_and_access_role_definitions.security_admin.items[0].id
+      ]
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+    }
+    
+    applications = {
+      include_applications = ["All"]
+    }
+  }
+  
+  grant_controls = {
+    operator = "OR"
+    authentication_strength = {
+      id = "00000000-0000-0000-0000-000000000004"  # Phishing-resistant MFA
+    }
+  }
+}
+```
+
+### Block Untrusted Locations
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "block_untrusted" {
+  display_name = "Block Access from Untrusted Locations"
+  state        = "enabled"
+  
+  conditions = {
+    client_app_types = ["all"]
+    
+    users = {
+      include_users = ["All"]
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+    }
+    
+    applications = {
+      include_applications = ["All"]
+    }
+    
+    locations = {
+      include_locations = ["All"]
+      exclude_locations = [
+        "AllTrusted",
+        microsoft365_graph_beta_identity_and_access_named_location.vpn.id
+      ]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["mfa", "compliantDevice"]
+  }
+}
+```
+
+### Require Compliant Device for Office 365
+
+```hcl
+resource "microsoft365_graph_beta_identity_and_access_conditional_access_policy" "o365_compliant" {
+  display_name = "Require Compliant Device for Office 365"
+  state        = "enabled"
+  
+  conditions = {
+    client_app_types = ["browser", "mobileAppsAndDesktopClients"]
+    
+    users = {
+      include_users = ["All"]
+      exclude_groups = [
+        microsoft365_graph_beta_groups_group.breakglass.id
+      ]
+    }
+    
+    applications = {
+      include_applications = ["Office365"]
+    }
+    
+    platforms = {
+      include_platforms = ["windows", "macOS"]
+    }
+  }
+  
+  grant_controls = {
+    operator          = "OR"
+    built_in_controls = ["compliantDevice", "domainJoinedDevice"]
+  }
+}
+```
+
+## Import Syntax
+
+```bash
+terraform import microsoft365_graph_beta_identity_and_access_conditional_access_policy.policy <policy-id>
+```
+
+## Best Practices
+
+<Warning>
+  Always exclude break-glass accounts from all conditional access policies to prevent lockout scenarios.
+</Warning>
+
+<AccordionGroup>
+  <Accordion title="Test in report-only mode first">
+    Use `state = "enabledForReportingButNotEnforced"` to test policies before enforcement.
+  </Accordion>
+
+  <Accordion title="Layer security controls">
+    Combine multiple controls for defense in depth (MFA + compliant device + trusted location).
+  </Accordion>
+
+  <Accordion title="Use descriptive names">
+    Name policies clearly to indicate their purpose and scope (e.g., "CAD001-O365: Require Compliant Device").
+  </Accordion>
+
+  <Accordion title="Document policy intent">
+    Use descriptions to explain why the policy exists and what it protects.
+  </Accordion>
+
+  <Accordion title="Monitor sign-in logs">
+    Regularly review sign-in logs to identify blocked users and policy impact.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Authentication Strength](/resources/identity-access/authentication-strength)
+- [Named Locations](/resources/identity-access/named-locations)
+- [Device Compliance](/resources/device-management/compliance-policies)
