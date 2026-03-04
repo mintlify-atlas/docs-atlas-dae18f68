@@ -1,0 +1,227 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "Microsoft 365 Terraform Provider",
+  "projectDescription": "Community Terraform provider for managing Microsoft 365 environments using Infrastructure as Code with support for Intune, Teams, and Defender.",
+  "theme": "aspen",
+  "primaryColor": "#594ed8",
+  "lightColor": "#acacf4",
+  "darkColor": "#040404",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "authentication/overview",
+              "authentication/client-secret",
+              "authentication/client-certificate",
+              "authentication/device-code",
+              "authentication/interactive-browser",
+              "authentication/managed-identity",
+              "authentication/workload-identity",
+              "authentication/oidc",
+              "authentication/oidc-github",
+              "authentication/oidc-azure-devops",
+              "authentication/azure-cli",
+              "authentication/azure-developer-cli"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/provider-configuration",
+              "configuration/environment-variables",
+              "configuration/cloud-environments",
+              "configuration/client-options",
+              "configuration/proxy-settings"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/resource-management",
+              "concepts/graph-api-versions",
+              "concepts/state-management",
+              "concepts/drift-detection"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/terraform-best-practices",
+              "guides/batch-import",
+              "guides/progressive-rollout",
+              "guides/workspace-design",
+              "guides/multi-tenant",
+              "guides/disaster-recovery"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Resources",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "resources/overview"
+            ]
+          },
+          {
+            "group": "Device & App Management",
+            "pages": [
+              "resources/device-app-management/overview",
+              "resources/device-app-management/mobile-apps",
+              "resources/device-app-management/app-configuration",
+              "resources/device-app-management/app-assignments"
+            ]
+          },
+          {
+            "group": "Device Management",
+            "pages": [
+              "resources/device-management/overview",
+              "resources/device-management/configuration-policies",
+              "resources/device-management/compliance-policies",
+              "resources/device-management/windows-updates",
+              "resources/device-management/enrollment"
+            ]
+          },
+          {
+            "group": "Identity & Access",
+            "pages": [
+              "resources/identity-access/overview",
+              "resources/identity-access/conditional-access",
+              "resources/identity-access/authentication-strength",
+              "resources/identity-access/named-locations",
+              "resources/identity-access/custom-security-attributes"
+            ]
+          },
+          {
+            "group": "Applications",
+            "pages": [
+              "resources/applications/overview",
+              "resources/applications/app-registrations",
+              "resources/applications/service-principals",
+              "resources/applications/credentials"
+            ]
+          },
+          {
+            "group": "Groups & Users",
+            "pages": [
+              "resources/groups-users/overview",
+              "resources/groups-users/groups",
+              "resources/groups-users/users",
+              "resources/groups-users/membership"
+            ]
+          },
+          {
+            "group": "Microsoft Teams",
+            "pages": [
+              "resources/teams/overview",
+              "resources/teams/teams",
+              "resources/teams/channels",
+              "resources/teams/settings"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Data Sources",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "data-sources/overview"
+            ]
+          },
+          {
+            "group": "Device Management",
+            "pages": [
+              "data-sources/device-management"
+            ]
+          },
+          {
+            "group": "Identity & Access",
+            "pages": [
+              "data-sources/identity-access"
+            ]
+          },
+          {
+            "group": "Applications",
+            "pages": [
+              "data-sources/applications"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Provider",
+            "pages": [
+              "reference/provider-schema",
+              "reference/provider-roadmap",
+              "reference/changelog"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "reference/development-guide",
+              "reference/provider-comparison",
+              "reference/known-issues",
+              "reference/contributing"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "reference/examples"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Wide Resource Coverage - 135+ resources across Intune, Microsoft 365, Teams, and Defender",
+    "Multi-Cloud Support - Public, GCC, GCC High, DoD, China, and sovereign clouds",
+    "Flexible Authentication - 11 authentication methods including managed identity and OIDC",
+    "Dual API Support - Both Microsoft Graph v1.0 and beta endpoints",
+    "Infrastructure as Code - Version control, GitOps workflows, and drift detection",
+    "Enterprise Security - Certificate-based auth, proxy support, and workload identity",
+    "Advanced Client Options - Retry logic, timeout controls, compression, and chaos testing",
+    "Kiota SDK Integration - Strongly-typed development using Microsoft's official SDKs"
+  ],
+  "publicApiSurface": [
+    "Resource: microsoft365_graph_beta_device_and_app_management_win32_app",
+    "Resource: microsoft365_graph_beta_device_and_app_management_ios_managed_mobile_app",
+    "Resource: microsoft365_graph_beta_device_and_app_management_android_managed_mobile_app",
+    "Resource: microsoft365_graph_beta_device_management_windows_driver_update_profile",
+    "Resource: microsoft365_graph_beta_device_management_windows_quality_update_profile",
+    "Resource: microsoft365_graph_beta_device_management_windows_feature_update_profile",
+    "Resource: microsoft365_graph_beta_identity_and_access_conditional_access_policy",
+    "Resource: microsoft365_graph_beta_identity_and_access_authentication_strength_policy",
+    "Resource: microsoft365_graph_beta_identity_and_access_named_location",
+    "Resource: microsoft365_graph_beta_applications_application",
+    "Resource: microsoft365_graph_beta_applications_service_principal",
+    "Resource: microsoft365_graph_beta_groups_group",
+    "Data Source: microsoft365_graph_beta_device_and_app_management_mobile_apps",
+    "Data Source: microsoft365_graph_beta_device_management_configuration_policies",
+    "Data Source: microsoft365_graph_beta_identity_and_access_conditional_access_policies",
+    "Data Source: microsoft365_graph_beta_applications_applications",
+    "Data Source: microsoft365_graph_beta_groups_groups",
+    "Action: microsoft365_graph_beta_device_management_restart_now"
+  ]
+}
